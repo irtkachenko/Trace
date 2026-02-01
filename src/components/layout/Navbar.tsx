@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { SignInButton, SignOutButton } from '../auth/auth-buttons';
 import Logo from '../ui/Logo';
+import { ConnectionIndicator } from './ConnectionIndicator';
 
 interface NavbarProps {
   user?: {
@@ -36,8 +37,9 @@ export default function Navbar({ user, onMenuClick }: NavbarProps) {
         <Logo />
       </div>
 
-      {/* Right: Auth */}
+      {/* Right: Connection Status & Auth */}
       <div className="flex items-center gap-4">
+        {user && <ConnectionIndicator showText />}
         {user ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

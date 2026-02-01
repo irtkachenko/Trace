@@ -9,7 +9,7 @@ interface AttachmentPreviewProps {
   onRemove: (id: string) => void;
 }
 
-export function AttachmentPreview({ attachment, onRemove }: AttachmentPreviewProps) {
+export default function AttachmentPreview({ attachment, onRemove }: AttachmentPreviewProps) {
   const isImage = attachment.type === 'image';
 
   return (

@@ -1,9 +1,10 @@
 'use client';
 
+import { memo } from 'react';
 import { Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-export default function NewChatButton() {
+function NewChatButtonBase() {
   const router = useRouter();
 
   const handleCreateChat = async () => {
@@ -25,3 +26,5 @@ export default function NewChatButton() {
     </div>
   );
 }
+
+export const NewChatButton = memo(NewChatButtonBase);

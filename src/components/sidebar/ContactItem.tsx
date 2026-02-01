@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { Loader2, MessageSquarePlus, User as UserIcon } from 'lucide-react';
 import Image from 'next/image';
 import { useTransition } from 'react';
@@ -19,7 +20,7 @@ interface ContactItemProps {
   onActionEnd?: () => void;
 }
 
-export function ContactItem({ 
+function ContactItemBase({ 
   user, 
   disabled,
   onActionStart,
@@ -128,3 +129,5 @@ export function ContactItem({
     </div>
   );
 }
+
+export const ContactItem = memo(ContactItemBase);

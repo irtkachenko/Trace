@@ -1,5 +1,7 @@
 'use client';
 
+import { memo } from 'react';
+
 import { MessageSquare, Trash2, User } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -17,12 +19,10 @@ import { useChats, useDeleteChat } from '@/hooks/useChatHooks';
 import { PresenceIndicator } from './PresenceIndicator';
 import { formatRelativeTime } from '@/lib/date-utils';
 
-export default function ChatList() {
+function ChatListBase() {
   const { data: chats, isLoading } = useChats();
   const { user } = useSupabaseAuth();
-
   const deleteChat = useDeleteChat();
-  // const { onlineUsers } = usePresence(); // REMOVED: Caused full re-renders
   const [chatToDelete, setChatToDelete] = useState<string | null>(null);
 
   const currentUserId = user?.id;
@@ -31,10 +31,48 @@ export default function ChatList() {
     window.dispatchEvent(new CustomEvent('close-mobile-sidebar'));
   };
 
-  if (isLoading)
-    return <div className="p-8 text-center text-sm text-gray-500 mt-10">Завантаження...</div>;
-  if (!chats?.length)
-    return <div className="p-8 text-center text-sm text-gray-500 mt-10">Немає діалогів</div>;
+  const handleDeleteChat = (chatId: string) => {
+    setChatToDelete(chatId);
+  };
+
+  const handleConfirmDelete = () => {
+    if (chatToDelete) {
+      deleteChat.mutate(chatToDelete);
+      setChatToDelete(null);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <>
+        <div className="p-8 text-center text-sm text-gray-500 mt-10">Завантаження...</div>
+        <ConfirmationDialog
+          open={!!chatToDelete}
+          onOpenChange={(open) => !open && setChatToDelete(null)}
+          title="Delete Chat"
+          description="Are you sure? This action cannot be undone."
+          onConfirm={handleConfirmDelete}
+          isLoading={deleteChat.isPending}
+        />
+      </>
+    );
+  }
+
+  if (!chats?.length) {
+    return (
+      <>
+        <div className="p-8 text-center text-sm text-gray-500 mt-10">Немає діалогів</div>
+        <ConfirmationDialog
+          open={!!chatToDelete}
+          onOpenChange={(open) => !open && setChatToDelete(null)}
+          title="Delete Chat"
+          description="Are you sure? This action cannot be undone."
+          onConfirm={handleConfirmDelete}
+          isLoading={deleteChat.isPending}
+        />
+      </>
+    );
+  }
 
   return (
     <>
@@ -91,12 +129,11 @@ export default function ChatList() {
                         <User className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors" />
                       )}
                      </div>
-                    {partner?.id && (
-                      <PresenceIndicator 
-                        userId={partner.id} 
-                        className="absolute bottom-0 right-0 w-2.5 h-2.5" 
-                      />
-                    )}
+                    <PresenceIndicator 
+                      userId={partner?.id || ''} 
+                      className="absolute bottom-0 right-0 w-2.5 h-2.5" 
+                      showOffline={false}
+                    />
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -132,7 +169,7 @@ export default function ChatList() {
                 </ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuItem
-                  onClick={() => setChatToDelete(chat.id)}
+                  onClick={() => handleDeleteChat(chat.id)}
                   className="text-red-400 focus:text-red-400 focus:bg-red-500/10 gap-2"
                 >
                   <Trash2 className="w-4 h-4" /> Delete Chat
@@ -148,14 +185,11 @@ export default function ChatList() {
         onOpenChange={(open) => !open && setChatToDelete(null)}
         title="Delete Chat"
         description="Are you sure? This action cannot be undone."
-        onConfirm={() => {
-          if (chatToDelete) {
-            deleteChat.mutate(chatToDelete);
-            setChatToDelete(null);
-          }
-        }}
+        onConfirm={handleConfirmDelete}
         isLoading={deleteChat.isPending}
       />
     </>
   );
 }
+
+export const ChatList = memo(ChatListBase);

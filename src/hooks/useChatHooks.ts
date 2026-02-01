@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   useInfiniteQuery, 
   useMutation, 
@@ -276,9 +276,16 @@ export function useChatTyping(chatId: string) {
   const [isTyping, setIsTyping] = useState<Record<string, boolean>>({});
   const channelRef = useRef<any>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const managerRef = useRef<any>(null);
 
   useEffect(() => {
     if (!chatId || !user?.id) return;
+
+    // Clean up previous channel if exists
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
 
     const channel = supabase.channel(`typing:${chatId}`, {
       config: { presence: { key: user.id } },
@@ -304,12 +311,14 @@ export function useChatTyping(chatId: string) {
 
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      channel.unsubscribe();
-      channelRef.current = null;
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
     };
-  }, [chatId, user]);
+  }, [chatId, user?.id]);
 
-  const setTyping = useCallback((typing: boolean) => {
+  const setTyping = (typing: boolean) => {
     if (channelRef.current) {
       channelRef.current.track({ isTyping: typing });
 
@@ -322,7 +331,7 @@ export function useChatTyping(chatId: string) {
         }, 3000);
       }
     }
-  }, []);
+  };
 
   return { isTyping, setTyping };
 }
@@ -520,23 +529,36 @@ export function useSendMessage(chatId: string) {
 
 export function useDeleteMessage(chatId: string) {
   const queryClient = useQueryClient();
+  const { user } = useSupabaseAuth();
 
   return useMutation({
     mutationFn: async (messageId: string) => {
+      console.log('Deleting message:', messageId, 'Current user:', user?.id, 'Chat ID:', chatId);
+      
+      // First, let's check if the message exists and belongs to the user
+      const { data: messageCheck, error: checkError } = await supabase
+        .from('messages')
+        .select('id, sender_id, chat_id')
+        .eq('id', messageId)
+        .single();
+      
+      console.log('Message ownership check:', { messageCheck, checkError });
+      
       const { data, error } = await supabase
         .from('messages')
         .delete()
         .eq('id', messageId)
-        .eq('chat_id', chatId);
+        .eq('chat_id', chatId)
+        .select();
+
+      console.log('Delete response:', { data, error });
 
       if (error) {
+        console.error('Supabase delete error:', error);
         throw error;
       }
       
-      if (!data || data.length === 0) {
-        throw new Error('Немає прав на видалення або повідомлення вже видалено');
-      }
-
+      // Success - return the deleted data (can be null if no rows returned)
       return data;
     },
     // Чітко вказуємо, що чекаємо string
@@ -567,6 +589,8 @@ export function useDeleteMessage(chatId: string) {
     },
     onSuccess: () => {
       toast.success('Повідомлення видалено');
+      // Invalidate messages query to ensure UI is updated
+      queryClient.invalidateQueries({ queryKey: ['messages', chatId] });
     },
   });
 }
@@ -660,88 +684,99 @@ export function useScrollToMessage(
     }
   }, [messages, pendingScrollTarget, isFetchingHistory, virtuosoRef]);
 
-  const scrollToMessage = useCallback(
-    async (messageId: string, options?: { align?: 'start' | 'center' | 'end'; behavior?: 'smooth' | 'auto' }) => {
-      const maxPagesToFetch = 10;
-      let pagesFetched = 0;
+  const scrollToMessage = async (
+    messageId: string, 
+    options?: { align?: 'start' | 'center' | 'end'; behavior?: 'smooth' | 'auto' }
+  ) => {
+    const maxPagesToFetch = 10;
+    let pagesFetched = 0;
+    
+    const tryScroll = (currentMessages: Message[]) => {
+      const index = currentMessages.findIndex((m: Message) => m.id === messageId);
       
-      const tryScroll = (currentMessages: Message[]) => {
-        const index = currentMessages.findIndex((m: Message) => m.id === messageId);
+      if (index !== -1) {
+        // Message found, scroll to it with proper timing
+        setTimeout(() => {
+          virtuosoRef.current?.scrollToIndex({
+            index,
+            behavior: options?.behavior || 'smooth',
+            align: options?.align || 'center',
+          });
+          setHighlightedId(messageId);
+          setTimeout(() => setHighlightedId(null), 3000);
+        }, 100);
         
-        if (index !== -1) {
-          // Message found, scroll to it with proper timing
-          setTimeout(() => {
-            virtuosoRef.current?.scrollToIndex({
-              index,
-              behavior: options?.behavior || 'smooth',
-              align: options?.align || 'center',
-            });
-            setHighlightedId(messageId);
-            setTimeout(() => setHighlightedId(null), 3000);
-          }, 100);
+        return true;
+      }
+      return false;
+    };
+
+    // First attempt with current messages
+    if (tryScroll(messages)) {
+      return;
+    }
+
+    // Message not found, try to fetch previous pages
+    if (!hasPreviousPage) {
+      toast.error('Message not found in chat history');
+      return;
+    }
+
+    toast.info('Loading chat history...');
+    setPendingScrollTarget(messageId);
+    setIsFetchingHistory(true);
+    
+    // Fetch loop with proper TanStack Query Promise handling
+    const fetchLoop = async () => {
+      try {
+        while (pagesFetched < maxPagesToFetch) {
+          // Check if we should continue fetching by getting current state
+          const currentData = queryClient.getQueryData(['messages', chatId]) as any;
+          const hasNextPage = currentData?.hasPreviousPage;
           
-          return true;
-        }
-        return false;
-      };
-
-      // First attempt with current messages
-      if (tryScroll(messages)) {
-        return;
-      }
-
-      // Message not found, try to fetch previous pages
-      if (!hasPreviousPage) {
-        toast.error('Message not found in chat history');
-        return;
-      }
-
-      toast.info('Loading chat history...');
-      setPendingScrollTarget(messageId);
-      setIsFetchingHistory(true);
-      
-      // Fetch loop with proper TanStack Query Promise handling and fresh data access
-      const fetchLoop = async () => {
-        try {
-          while (pagesFetched < maxPagesToFetch && hasPreviousPage) {
-            pagesFetched++;
-            
-            // Await the actual Promise from TanStack Query
-            await fetchPreviousPage();
-            
-            // Get fresh data immediately after fetch to avoid stale closure
-            const freshData = queryClient.getQueryData(['messages', chatId]) as any;
-            const freshMessages = freshData?.pages?.flat() || [];
-            
-            // Try to scroll with fresh messages
-            const scrolled = tryScroll(freshMessages);
-            if (scrolled) {
-              break; // Message found and scrolled, stop fetching
-            }
+          if (!hasNextPage) {
+            break; // No more pages to fetch
           }
-        } catch (error) {
-          console.error('Error fetching chat history:', error);
-          toast.error('Failed to load chat history');
-        } finally {
-          setIsFetchingHistory(false);
           
-          // Final check if message was never found
-          if (pendingScrollTarget) {
-            if (pagesFetched >= maxPagesToFetch) {
-              toast.error('Message not found after loading history');
-            } else {
-              toast.error('Message not found in available history');
-            }
-            setPendingScrollTarget(null);
+          pagesFetched++;
+          
+          // Await the actual Promise from TanStack Query
+          await fetchPreviousPage();
+          
+          // Small delay to ensure state is updated
+          await new Promise(resolve => setTimeout(resolve, 10));
+          
+          // Get fresh data after fetch
+          const freshData = queryClient.getQueryData(['messages', chatId]) as any;
+          const freshMessages = freshData?.pages?.flat() || [];
+          
+          // Try to scroll with fresh messages
+          const scrolled = tryScroll(freshMessages);
+          if (scrolled) {
+            break; // Message found and scrolled, stop fetching
           }
         }
-      };
+      } catch (error) {
+        console.error('Error fetching chat history:', error);
+        toast.error('Failed to load chat history');
+      } finally {
+        setIsFetchingHistory(false);
+        
+        // Final check if message was never found
+        if (pendingScrollTarget) {
+          if (pagesFetched >= maxPagesToFetch) {
+            toast.error('Message not found after loading history');
+          } else {
+            toast.error('Message not found in available history');
+          }
+          setPendingScrollTarget(null);
+        }
+      }
+    };
 
-      fetchLoop();
-    },
-    [messages, hasPreviousPage, fetchPreviousPage, virtuosoRef, isFetchingHistory, queryClient, chatId],
-  );
+    // Start the fetch loop without blocking
+    fetchLoop().catch(console.error);
+  };
 
   return { scrollToMessage, highlightedId };
 }
-

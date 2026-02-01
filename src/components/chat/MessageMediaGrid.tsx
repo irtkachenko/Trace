@@ -2,13 +2,19 @@
 
 import { FileX, ImageOff, PlayCircle } from 'lucide-react';
 import Image from 'next/image';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { Attachment } from '@/types';
-import { ImageModal } from './ImageModal';
+import { useStorageUrl } from '@/hooks/useStorageUrl';
+import { isMediaType, storageConfig } from '@/config/storage.config';
+import ImageModal from './ImageModal';
 
 interface MessageMediaGridProps {
   items: Attachment[];
+}
+
+interface AttachmentWithUrl extends Attachment {
+  processedUrl?: string;
 }
 
 const MediaPlaceholder = ({ reason = 'deleted' }: { reason?: 'deleted' | 'error' }) => {
@@ -23,30 +29,77 @@ const MediaPlaceholder = ({ reason = 'deleted' }: { reason?: 'deleted' | 'error'
   );
 };
 
-export function MessageMediaGrid({ items }: MessageMediaGridProps) {
+export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [failedUrls, setFailedUrls] = useState<Set<string>>(new Set());
+  const [processedItems, setProcessedItems] = useState<AttachmentWithUrl[]>([]);
+  const { getUrl, isLoading: isStorageLoading } = useStorageUrl();
 
-  if (!items || items.length === 0) return null;
+  // Process attachment URLs to handle private storage
+  useEffect(() => {
+    const processUrls = async () => {
+      if (!items || items.length === 0) {
+        setProcessedItems([]);
+        return;
+      }
+
+      const processed = await Promise.all(
+        items.map(async (item) => {
+          // Skip if already processed or if URL is already a signed URL
+          if (item.url.includes('?token=')) {
+            return { ...item, processedUrl: item.url };
+          }
+
+          try {
+            // Extract bucket and path from URL if it's a Supabase storage URL
+            const urlMatch = item.url.match(/\/storage\/v1\/object\/public\/([^\/]+)\/(.+)/);
+            if (urlMatch) {
+              const [, bucket, path] = urlMatch;
+              const signedUrl = await getUrl(bucket, decodeURIComponent(path), {
+                expiresIn: storageConfig.defaultSignedUrlExpiry // Use config default
+              });
+              return { ...item, processedUrl: signedUrl };
+            }
+            
+            // If not a Supabase storage URL, use as-is
+            return { ...item, processedUrl: item.url };
+          } catch (error) {
+            console.error('Failed to process attachment URL:', error);
+            // Fallback to original URL
+            return { ...item, processedUrl: item.url };
+          }
+        })
+      );
+
+      setProcessedItems(processed);
+    };
+
+    processUrls();
+  }, [items, getUrl]);
+
+  if (!items || items.length === 0) {
+    return <div className="hidden" />;
+  }
 
   const handleImageError = (url: string) => {
     setFailedUrls((prev) => new Set(prev).add(url));
   };
 
-  const activeMedia = items.filter((item) => !item.isDeleted && !failedUrls.has(item.url));
-  const count = items.length;
+  const activeMedia = processedItems.filter((item) => !item.is_deleted && !failedUrls.has(item.processedUrl || item.url));
+  const count = processedItems.length;
 
   const handleMediaClick = (index: number) => {
-    const clickedItem = items[index];
-    if (clickedItem.isDeleted || failedUrls.has(clickedItem.url)) return;
+    const clickedItem = processedItems[index];
+    if (clickedItem.is_deleted || failedUrls.has(clickedItem.processedUrl || clickedItem.url)) return;
     const activeIndex = activeMedia.findIndex((m) => m.id === clickedItem.id);
     if (activeIndex !== -1) setSelectedIndex(activeIndex);
   };
 
-  const modalImages = activeMedia.filter(item => item.type === 'image');
+  const modalImages = activeMedia.filter(item => isMediaType(item.type));
 
-  const renderItem = (item: Attachment, index: number, isLarge = false) => {
-    const isFailed = failedUrls.has(item.url) || item.isDeleted;
+  const renderItem = (item: AttachmentWithUrl, index: number, isLarge = false) => {
+    const itemUrl = item.processedUrl || item.url;
+    const isFailed = failedUrls.has(itemUrl) || item.is_deleted;
 
     return (
       <div 
@@ -57,7 +110,7 @@ export function MessageMediaGrid({ items }: MessageMediaGridProps) {
         )}
       >
         {isFailed ? (
-          <MediaPlaceholder reason={item.isDeleted ? 'deleted' : 'error'} />
+          <MediaPlaceholder reason={item.is_deleted ? 'deleted' : 'error'} />
         ) : (
           <button
             type="button"
@@ -66,7 +119,7 @@ export function MessageMediaGrid({ items }: MessageMediaGridProps) {
           >
             {item.type === 'video' ? (
               <div className="w-full h-full relative bg-black">
-                <video src={item.url} className="w-full h-full object-cover text-white">
+                <video src={itemUrl} className="w-full h-full object-cover text-white">
                   <track kind="captions" />
                 </video>
                 <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
@@ -75,12 +128,12 @@ export function MessageMediaGrid({ items }: MessageMediaGridProps) {
               </div>
             ) : (
               <Image
-                src={item.url}
+                src={itemUrl}
                 alt=""
                 fill
                 className="object-cover group-hover:scale-105 transition-transform duration-500"
                 unoptimized
-                onError={() => handleImageError(item.url)}
+                onError={() => handleImageError(itemUrl)}
               />
             )}
             {index === 3 && count > 4 && (
@@ -104,28 +157,28 @@ export function MessageMediaGrid({ items }: MessageMediaGridProps) {
           <div 
             className="relative overflow-hidden bg-neutral-200 dark:bg-neutral-800 rounded-2xl"
             style={{ 
-              aspectRatio: items[0].metadata?.width && items[0].metadata?.height 
-                ? `${items[0].metadata.width}/${items[0].metadata.height}` 
+              aspectRatio: processedItems[0].metadata?.width && processedItems[0].metadata?.height 
+                ? `${processedItems[0].metadata.width}/${processedItems[0].metadata.height}` 
                 : '16/10',
               maxHeight: '500px'
             }}
           >
-             {items[0].isDeleted || failedUrls.has(items[0].url) ? (
+             {processedItems[0].is_deleted || failedUrls.has(processedItems[0].processedUrl || processedItems[0].url) ? (
                <MediaPlaceholder reason="error" />
              ) : (
                <button type="button" onClick={() => handleMediaClick(0)} className="w-full h-full relative block">
-                 {items[0].type === 'video' ? (
-                    <video src={items[0].url} className="w-full h-full object-contain bg-black">
+                 {processedItems[0].type === 'video' ? (
+                    <video src={processedItems[0].processedUrl || processedItems[0].url} className="w-full h-full object-contain bg-black">
                       <track kind="captions" />
                     </video>
                  ) : (
                     <Image 
-                      src={items[0].url} 
+                      src={processedItems[0].processedUrl || processedItems[0].url} 
                       alt="" 
                       fill 
                       className="object-contain bg-neutral-900/10" 
                       unoptimized 
-                      onError={() => handleImageError(items[0].url)}
+                      onError={() => handleImageError(processedItems[0].processedUrl || processedItems[0].url)}
                     />
                  )}
                </button>
@@ -133,17 +186,17 @@ export function MessageMediaGrid({ items }: MessageMediaGridProps) {
           </div>
         )}
 
-        {count === 2 && items.map((item, i) => renderItem(item, i))}
+        {count === 2 && processedItems.map((item, i) => renderItem(item, i))}
         
         {count === 3 && (
           <>
-            {renderItem(items[0], 0, true)}
-            {renderItem(items[1], 1)}
-            {renderItem(items[2], 2)}
+            {renderItem(processedItems[0], 0, true)}
+            {renderItem(processedItems[1], 1)}
+            {renderItem(processedItems[2], 2)}
           </>
         )}
 
-        {count >= 4 && items.slice(0, 4).map((item, i) => renderItem(item, i))}
+        {count >= 4 && processedItems.slice(0, 4).map((item, i) => renderItem(item, i))}
       </div>
 
       <ImageModal

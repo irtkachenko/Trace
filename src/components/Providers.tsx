@@ -1,10 +1,11 @@
 'use client';
 
-import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { useState, useEffect, useRef } from 'react';
 import { toast, Toaster } from 'sonner';
 import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
+import { queryClient } from '@/lib/query-client';
 
 /**
  * Внутрішній компонент-запобіжник.
@@ -45,33 +46,6 @@ function RenderGuard({ children }: { children: React.ReactNode }) {
 }
 
 export default function Providers({ children }: { children: React.ReactNode }) {
-  // Ініціалізуємо QueryClient один раз через useState
-  const [queryClient] = useState(() => {
-    return new QueryClient({
-      mutationCache: new MutationCache({
-        onError: (error: any) => {
-          // If the error has a 'status' property, it was likely handled by the Supabase fetch interceptor
-          // We only want to toast for client-side errors or unexpected issues here.
-          if (!error?.status) {
-            toast.error('Error', {
-              description: error.message || 'An unexpected error occurred.',
-            });
-          }
-        },
-      }),
-      defaultOptions: {
-        queries: {
-          staleTime: 60 * 1000,
-          // Захист від зайвих запитів при помилці авторизації
-          retry: (failureCount, error: any) => {
-            if (error?.status === 401) return false;
-            return failureCount < 3;
-          },
-        },
-      },
-    });
-  });
-
   return (
     <QueryClientProvider client={queryClient}>
       <GlobalErrorBoundary>

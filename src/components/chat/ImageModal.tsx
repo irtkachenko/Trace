@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, ChevronLeft, ChevronRight, Download, ImageOff, X } from 'lucide-react';
 import Image from 'next/image';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import type { Attachment } from '@/types';
@@ -15,7 +15,7 @@ interface ImageModalProps {
   onClose: () => void;
 }
 
-export function ImageModal({ isOpen, images, initialIndex, onClose }: ImageModalProps) {
+export default function ImageModal({ isOpen, images, initialIndex, onClose }: ImageModalProps) {
   const [mounted, setMounted] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [direction, setDirection] = useState(0);
@@ -39,8 +39,7 @@ export function ImageModal({ isOpen, images, initialIndex, onClose }: ImageModal
     setDirection(0);
   }
 
-  const handleNext = useCallback(
-    (e?: React.MouseEvent | KeyboardEvent) => {
+  const handleNext = (e?: React.MouseEvent | KeyboardEvent) => {
       // Безпечна перевірка: спочатку чи існує 'e', потім чи є в ньому метод
       if (e && 'stopPropagation' in e) {
         e.stopPropagation();
@@ -51,12 +50,9 @@ export function ImageModal({ isOpen, images, initialIndex, onClose }: ImageModal
         setCurrentIndex((prev) => prev + 1);
         setHasError(false);
       }
-    },
-    [currentIndex, images.length],
-  );
+    };
 
-  const handlePrev = useCallback(
-    (e?: React.MouseEvent | KeyboardEvent) => {
+  const handlePrev = (e?: React.MouseEvent | KeyboardEvent) => {
       // Аналогічно тут
       if (e && 'stopPropagation' in e) {
         e.stopPropagation();
@@ -67,9 +63,7 @@ export function ImageModal({ isOpen, images, initialIndex, onClose }: ImageModal
         setCurrentIndex((prev) => prev - 1);
         setHasError(false);
       }
-    },
-    [currentIndex],
-  );
+    };
 
   // 3. Обробка клавіш та блокування скролу
   useEffect(() => {
@@ -91,7 +85,9 @@ export function ImageModal({ isOpen, images, initialIndex, onClose }: ImageModal
     };
   }, [isOpen, onClose, handleNext, handlePrev]);
 
-  if (!mounted) return null;
+  if (!mounted) {
+    return <div className="hidden" />;
+  }
 
   const currentImage = images[currentIndex];
 

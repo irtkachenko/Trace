@@ -1,7 +1,7 @@
 'use client';
 
 import imageCompression from 'browser-image-compression';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useSupabaseAuth } from '@/components/SupabaseAuthProvider';
 import { createClient } from '@/lib/supabase/client';
@@ -28,7 +28,7 @@ export function useAttachment(chatId: string) {
     };
   }, [attachments]);
 
-  const uploadFile = useCallback(
+  const uploadFile =
     async (file: File) => {
       if (!user) {
         toast.error('Ви не авторизовані');
@@ -107,24 +107,22 @@ export function useAttachment(chatId: string) {
           prev.map((a) => (a.id === id ? { ...a, uploading: false, error: errorMessage } : a)),
         );
       }
-    },
-    [chatId, user, supabase],
-  );
+    };
 
-  const removeAttachment = useCallback((id: string) => {
+  const removeAttachment = (id: string) => {
     setAttachments((prev) => {
       const target = prev.find((a) => a.id === id);
       if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
       return prev.filter((a) => a.id !== id);
     });
-  }, []);
+  };
 
-  const clearAttachments = useCallback(() => {
+  const clearAttachments = () => {
     attachments.forEach((a) => {
       if (a.previewUrl) URL.revokeObjectURL(a.previewUrl);
     });
     setAttachments([]);
-  }, [attachments]);
+  };
 
   return {
     attachments,

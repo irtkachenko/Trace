@@ -4,11 +4,11 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { use, useEffect, useRef, useState } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 
 import ChatInput from '@/components/chat/ChatInput';
-import { MessageBubble } from '@/components/chat/MessageBubble';
+import MessageBubble from '@/components/chat/MessageBubble';
 import { useSupabaseAuth } from '@/components/SupabaseAuthProvider';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import {
@@ -63,22 +63,22 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
   }, [isChatLoading, chat, isError, router, isMessagesLoading]);
 
   // Interaction Handlers
-  const handleReply = useCallback((message: Message) => {
+  const handleReply = (message: Message) => {
     setEditingMessage(null);
     setReplyingTo(message);
-  }, []);
+  };
 
-  const handleEdit = useCallback((message: Message) => {
+  const handleEdit = (message: Message) => {
     setReplyingTo(null);
     setEditingMessage(message);
-  }, []);
+  };
 
-  const handleScrollToMessage = useCallback((messageId: string) => {
+  const handleScrollToMessage = (messageId: string) => {
     scrollToMessage(messageId, { align: 'center' });
-  }, [scrollToMessage]);
+  };
 
   // --- ЛОГІКА ОНОВЛЕННЯ ГАЛОЧОК ---
-  const recipientLastReadAt = useMemo(() => {
+  const recipientLastReadAt = (() => {
     if (!chat || !user) return null;
     
     // Визначаємо, чий timestamp читання нас цікавить (співрозмовника)
@@ -89,30 +89,41 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     const readMessage = messages.find(m => m.id === readMessageId);
     
     return readMessage?.created_at || null;
-  }, [chat, user, messages]);
+  })();
 
   // --- УНІКАЛЬНИЙ СПИСОК УЧАСНИКІВ ---
-  const uniqueParticipants = useMemo(() => {
-    const participants = new Map<string, User>();
+  const uniqueParticipants = (() => {
+    const participants: User[] = [];
     
     // Add current user
     if (user) {
-      participants.set(user.id, user);
+      // Handle both Supabase Auth user and database user types
+      const authUser = user as any; // Cast to access auth user properties
+      participants.push({
+        id: user.id,
+        name: authUser.user_metadata?.name || authUser.name || user.email?.split('@')[0] || 'Unknown User',
+        email: user.email || '',
+        email_verified: authUser.email_verified || null,
+        image: authUser.user_metadata?.avatar_url || authUser.image || null,
+        last_seen: authUser.last_seen || null
+      });
     }
     
     // Add chat participants from chat details
     if (chat?.participants) {
       chat.participants.forEach((participant: User) => {
-        participants.set(participant.id, participant);
+        if (!participants.find(p => p.id === participant.id)) {
+          participants.push(participant);
+        }
       });
     }
     
     // Add unique senders from messages (using joined user data)
     messages.forEach((message: Message) => {
-      if (message.sender_id && !participants.has(message.sender_id)) {
+      if (message.sender_id && !participants.find(p => p.id === message.sender_id)) {
         // Use joined user data if available, otherwise create minimal user object
         if (message.user) {
-          participants.set(message.sender_id, {
+          participants.push({
             id: message.sender_id,
             name: message.user.name,
             email: '', // Required field, use empty string as fallback
@@ -121,13 +132,13 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
             last_seen: null
           } as User);
         } else if (message.sender) {
-          participants.set(message.sender_id, message.sender);
+          participants.push(message.sender);
         }
       }
     });
     
-    return Array.from(participants.values());
-  }, [user, chat?.participants, messages]);
+    return participants;
+  })();
 
   if (isChatLoading || (isMessagesLoading && !messages.length)) {
     return (
@@ -140,7 +151,15 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     );
   }
 
-  if (!chat || isError) return null;
+  if (!chat || isError) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-black text-white">
+        <div className="text-center">
+          <p className="text-lg">Loading chat...</p>
+        </div>
+      </div>
+    );
+  }
 
   const otherParticipant = chat.participants.find((p: User) => p.id !== user?.id);
   const isOnline = otherParticipant && onlineUsers.has(otherParticipant.id);

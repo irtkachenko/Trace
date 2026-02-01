@@ -3,7 +3,7 @@
 import { X } from 'lucide-react';
 import type { PendingAttachment } from '@/hooks/useAttachment';
 import type { Message } from '@/types';
-import { AttachmentPreview } from './AttachmentPreview';
+import AttachmentPreview from './AttachmentPreview';
 
 interface ComposerAddonsProps {
   replyTo?: Message | null;
@@ -15,7 +15,7 @@ interface ComposerAddonsProps {
   otherParticipantName?: string;
 }
 
-export function ComposerAddons({
+export default function ComposerAddons({
   replyTo,
   onReplyCancel,
   editingMessage,

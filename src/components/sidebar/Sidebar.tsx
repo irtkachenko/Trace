@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import SidebarShell from './SidebarShell';
+import { SidebarShell } from './SidebarShell';
 
 export default async function Sidebar() {
   const supabase = await createClient();

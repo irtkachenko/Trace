@@ -1,10 +1,11 @@
 'use client';
 
+import { memo } from 'react';
 import { Search } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-export default function SearchInput() {
+function SearchInputBase() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState(searchParams.get('q') || '');
@@ -42,3 +43,5 @@ export default function SearchInput() {
     </div>
   );
 }
+
+export const SearchInput = memo(SearchInputBase);

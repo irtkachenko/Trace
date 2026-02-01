@@ -12,7 +12,7 @@ interface ReplyPreviewProps {
   onCancel: () => void;
 }
 
-export function ReplyPreview({ replyingTo, onCancel }: ReplyPreviewProps) {
+export default function ReplyPreview({ replyingTo, onCancel }: ReplyPreviewProps) {
   if (!replyingTo) return null;
 
   return (

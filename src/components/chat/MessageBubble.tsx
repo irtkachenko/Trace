@@ -1,7 +1,7 @@
 import Linkify from 'linkify-react';
 import { Check, CheckCheck, Clock, Download, Edit, FileIcon, Reply, Trash2 } from 'lucide-react';
-import { memo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useEffect, useState } from 'react';
 
 import {
   ContextMenu,
@@ -13,7 +13,7 @@ import {
 import { formatMessageDate } from '@/lib/date-utils';
 import { cn } from '@/lib/utils';
 import type { Message } from '@/types';
-import { MessageMediaGrid } from './MessageMediaGrid';
+import MessageMediaGrid from './MessageMediaGrid';
 
 interface MessageBubbleProps {
   message: Message;
@@ -28,30 +28,38 @@ interface MessageBubbleProps {
   otherParticipantName?: string;
 }
 
-export const MessageBubble = memo(
-  ({
-    message,
-    currentUserId,
-    isRead,
-    isEditing,
-    onReply,
-    onEdit,
-    onDelete,
-    onScrollToMessage,
-    isHighlighed,
-    otherParticipantName,
-  }: MessageBubbleProps) => {
-    // Use snake_case field names consistently (native database format)
-    const senderId = message.sender_id;
-    const isMe = senderId === currentUserId;
+export default function MessageBubble({
+  message,
+  currentUserId,
+  isRead,
+  isEditing,
+  onReply,
+  onEdit,
+  onDelete,
+  onScrollToMessage,
+  isHighlighed,
+  otherParticipantName,
+}: MessageBubbleProps) {
+  // Use snake_case field names consistently (native database format)
+  const senderId = message.sender_id;
+  const isMe = senderId === currentUserId;
 
-    // Check if message was edited - updated_at is NULL for new messages and only set on actual edits
-    const isEdited = !!message.updated_at;
+  // Check if message was edited - updated_at is NULL for new messages and only set on actual edits
+  const isEdited = !!message.updated_at;
 
-    const mediaAttachments = message.attachments?.filter((a) => a.type === 'image' || a.type === 'video') || [];
-    const fileAttachments = message.attachments?.filter((a) => a.type === 'file') || [];
+  const mediaAttachments = message.attachments?.filter((a) => a.type === 'image' || a.type === 'video') || [];
+  const fileAttachments = message.attachments?.filter((a) => a.type === 'file') || [];
 
-    return (
+  // Handle hydration mismatch by ensuring client-side rendering for dynamic content
+  const [isClient, setIsClient] = useState(false);
+  
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  const formattedDate = isClient ? formatMessageDate(message.created_at) : '';
+
+  return (
       <motion.div
         id={`message-${message.id}`}
         data-highlighted={isHighlighed}
@@ -180,7 +188,7 @@ export const MessageBubble = memo(
                     message.is_optimistic && 'opacity-70',
                   )}
                 >
-                  <span className="text-[9px] font-medium">{formatMessageDate(message.created_at)}</span>
+                  <span className="text-[9px] font-medium">{formattedDate}</span>
                   
                   {isEdited && (
                     <span className="text-[10px] text-gray-400/70 ml-1 font-medium">(edited)</span>
@@ -240,9 +248,12 @@ export const MessageBubble = memo(
                 </ContextMenuItem>
                 <ContextMenuItem
                   onClick={() => {
-                    if (window.confirm('Are you sure you want to delete this message? This action cannot be undone.')) {
-                      onDelete(message.id);
-                    }
+                    console.log('MessageBubble delete clicked:', { 
+                      messageId: message.id, 
+                      senderId: message.sender_id,
+                      messageContent: message.content?.substring(0, 50) + '...'
+                    });
+                    onDelete(message.id);
                   }}
                   className="gap-2 text-red-400 focus:text-red-400 focus:bg-red-500/10"
                 >
@@ -254,26 +265,4 @@ export const MessageBubble = memo(
         </ContextMenu>
       </motion.div>
     );
-  },
-  (prev, next) => {
-    // 1. Core content identity
-    if (prev.message.id !== next.message.id) return false;
-    if (prev.message.content !== next.message.content) return false;
-    
-    // 2. State & Context
-    if (prev.isRead !== next.isRead) return false;
-    if (prev.isHighlighed !== next.isHighlighed) return false;
-    if (prev.currentUserId !== next.currentUserId) return false;
-    if (prev.otherParticipantName !== next.otherParticipantName) return false;
-
-    // 3. Stable callbacks
-    if (prev.onReply !== next.onReply) return false;
-    if (prev.onEdit !== next.onEdit) return false;
-    if (prev.onDelete !== next.onDelete) return false;
-    if (prev.onScrollToMessage !== next.onScrollToMessage) return false;
-
-    return true;
-  },
-);
-
-MessageBubble.displayName = 'MessageBubble';
+}

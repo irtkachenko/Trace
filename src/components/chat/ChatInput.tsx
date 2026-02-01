@@ -2,13 +2,13 @@
 
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { Paperclip, Send } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAttachment } from '@/hooks/useAttachment';
 import { useSendMessage, useEditMessage } from '@/hooks/useChatHooks';
 import { cn } from '@/lib/utils';
 import type { Message } from '@/types';
 import { useSupabaseAuth } from '@/components/SupabaseAuthProvider';
-import { ComposerAddons } from './ComposerAddons';
+import ComposerAddons from './ComposerAddons';
 
 interface ChatInputProps {
   chatId: string;
@@ -67,21 +67,12 @@ export default function ChatInput({
   }, [content]);
 
   // Знаходимо повідомлення для реплаю в кеші
-  const replyToMessage = useMemo(() => {
-    if (!replyToId) return null;
-
-    // Чітко вказуємо тип даних у кеші: InfiniteData, що містить масиви Message
-    const data = queryClient.getQueryData<InfiniteData<Message[]>>([
+  const replyToMessage =
+    !replyToId ? null :
+    queryClient.getQueryData<InfiniteData<Message[]>>([
       'messages',
       chatId,
-    ]);
-
-    if (!data?.pages) return null;
-
-    // .flat() збирає всі повідомлення з усіх сторінок в один масив
-    // .find() шукає той самий об'єкт, який чекає ComposerAddons
-    return data.pages.flat().find((m) => m.id === replyToId) || null;
-  }, [replyToId, chatId, queryClient]);
+    ])?.pages?.flat().find((m) => m.id === replyToId) || null;
 
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();

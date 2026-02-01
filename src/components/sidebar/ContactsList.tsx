@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { Loader2, User as UserIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useSearchUsers } from '@/hooks/useChatHooks';
@@ -9,7 +10,7 @@ interface ContactsListProps {
   query: string;
 }
 
-export default function ContactsList({ query }: ContactsListProps) {
+function ContactsListBase({ query }: ContactsListProps) {
   const { data: users, isLoading } = useSearchUsers(query);
   // const { onlineUsers } = usePresence(); // REMOVED
 
@@ -69,4 +70,4 @@ export default function ContactsList({ query }: ContactsListProps) {
   );
 }
 
-ContactsList.whyDidYouRender = true;
+export const ContactsList = memo(ContactsListBase);
