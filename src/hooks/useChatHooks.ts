@@ -632,10 +632,12 @@ export function useScrollToMessage(
   messages: Message[],
   fetchPreviousPage: () => void,
   hasPreviousPage: boolean,
+  chatId: string,
 ) {
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [pendingScrollTarget, setPendingScrollTarget] = useState<string | null>(null);
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
+  const queryClient = useQueryClient();
 
   // Monitor messages array changes and retry scrolling if we have a pending target
   useEffect(() => {
@@ -698,36 +700,46 @@ export function useScrollToMessage(
       setPendingScrollTarget(messageId);
       setIsFetchingHistory(true);
       
-      // Fetch loop with limit to prevent infinite loops
+      // Fetch loop with proper TanStack Query Promise handling and fresh data access
       const fetchLoop = async () => {
-        while (pagesFetched < maxPagesToFetch && hasPreviousPage) {
-          pagesFetched++;
-          
-          // Wait for the fetch to complete and state to update
-          await new Promise<void>((resolve) => {
-            fetchPreviousPage();
+        try {
+          while (pagesFetched < maxPagesToFetch && hasPreviousPage) {
+            pagesFetched++;
             
-            // Wait a bit for React Query to update the state
-            setTimeout(() => {
-              resolve();
-            }, 300);
-          });
-        }
-        
-        setIsFetchingHistory(false);
-        
-        if (pagesFetched >= maxPagesToFetch) {
-          toast.error('Message not found after loading history');
-          setPendingScrollTarget(null);
-        } else if (!hasPreviousPage) {
-          toast.error('Message not found in available history');
-          setPendingScrollTarget(null);
+            // Await the actual Promise from TanStack Query
+            await fetchPreviousPage();
+            
+            // Get fresh data immediately after fetch to avoid stale closure
+            const freshData = queryClient.getQueryData(['messages', chatId]) as any;
+            const freshMessages = freshData?.pages?.flat() || [];
+            
+            // Try to scroll with fresh messages
+            const scrolled = tryScroll(freshMessages);
+            if (scrolled) {
+              break; // Message found and scrolled, stop fetching
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching chat history:', error);
+          toast.error('Failed to load chat history');
+        } finally {
+          setIsFetchingHistory(false);
+          
+          // Final check if message was never found
+          if (pendingScrollTarget) {
+            if (pagesFetched >= maxPagesToFetch) {
+              toast.error('Message not found after loading history');
+            } else {
+              toast.error('Message not found in available history');
+            }
+            setPendingScrollTarget(null);
+          }
         }
       };
 
       fetchLoop();
     },
-    [messages, hasPreviousPage, fetchPreviousPage, virtuosoRef, isFetchingHistory],
+    [messages, hasPreviousPage, fetchPreviousPage, virtuosoRef, isFetchingHistory, queryClient, chatId],
   );
 
   return { scrollToMessage, highlightedId };

@@ -47,6 +47,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     messages,
     fetchPreviousPage,
     hasPreviousPage,
+    id,
   );
 
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
