@@ -1,5 +1,5 @@
 import Linkify from 'linkify-react';
-import { Check, CheckCheck, Clock, Download, FileIcon, Reply, Trash2 } from 'lucide-react';
+import { Check, CheckCheck, Clock, Download, Edit, FileIcon, Reply, Trash2 } from 'lucide-react';
 import { memo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -19,6 +19,7 @@ interface MessageBubbleProps {
   message: Message;
   currentUserId: string | undefined;
   isRead?: boolean;
+  isEditing?: boolean;
   onReply: (message: Message) => void;
   onEdit: (message: Message) => void;
   onDelete: (messageId: string) => void;
@@ -32,6 +33,7 @@ export const MessageBubble = memo(
     message,
     currentUserId,
     isRead,
+    isEditing,
     onReply,
     onEdit,
     onDelete,
@@ -42,6 +44,9 @@ export const MessageBubble = memo(
     // Use snake_case field names consistently (native database format)
     const senderId = message.sender_id;
     const isMe = senderId === currentUserId;
+
+    // Check if message was edited - updated_at is NULL for new messages and only set on actual edits
+    const isEdited = !!message.updated_at;
 
     const mediaAttachments = message.attachments?.filter((a) => a.type === 'image' || a.type === 'video') || [];
     const fileAttachments = message.attachments?.filter((a) => a.type === 'file') || [];
@@ -77,11 +82,12 @@ export const MessageBubble = memo(
             <div className={cn('flex flex-col min-w-0 w-full', isMe ? 'items-end' : 'items-start')}>
               <div
                 className={cn(
-                  'relative px-4 py-2.5 shadow-2xl border border-white/10 min-w-0 max-w-full flex flex-col',
+                  'relative px-4 py-2.5 shadow-2xl border min-w-0 max-w-full flex flex-col transition-all duration-300',
                   isMe
-                    ? 'bg-blue-600 text-white rounded-2xl rounded-tr-sm'
-                    : 'bg-neutral-900/80 backdrop-blur-md text-gray-100 rounded-2xl rounded-tl-sm',
+                    ? 'bg-blue-600 text-white rounded-2xl rounded-tr-sm border-blue-400/50'
+                    : 'bg-neutral-900/80 backdrop-blur-md text-gray-100 rounded-2xl rounded-tl-sm border-white/10',
                   mediaAttachments.length > 0 && !message.content ? 'p-1.5 bg-neutral-900/50' : '',
+                  isEditing && 'ring-2 ring-blue-400/50 ring-offset-2 ring-offset-background',
                 )}
                 style={{ willChange: 'transform' }}
               >
@@ -175,6 +181,10 @@ export const MessageBubble = memo(
                   )}
                 >
                   <span className="text-[9px] font-medium">{formatMessageDate(message.created_at)}</span>
+                  
+                  {isEdited && (
+                    <span className="text-[10px] text-gray-400/70 ml-1 font-medium">(edited)</span>
+                  )}
 
                   {message.is_optimistic ? (
                     <div className="flex items-center ml-1">
@@ -226,10 +236,14 @@ export const MessageBubble = memo(
               <>
                 <ContextMenuSeparator />
                 <ContextMenuItem onClick={() => onEdit(message)} className="gap-2">
-                  <Clock className="w-4 h-4" /> Edit Message
+                  <Edit className="w-4 h-4" /> Edit Message
                 </ContextMenuItem>
                 <ContextMenuItem
-                  onClick={() => onDelete(message.id)}
+                  onClick={() => {
+                    if (window.confirm('Are you sure you want to delete this message? This action cannot be undone.')) {
+                      onDelete(message.id);
+                    }
+                  }}
                   className="gap-2 text-red-400 focus:text-red-400 focus:bg-red-500/10"
                 >
                   <Trash2 className="w-4 h-4" /> Delete Message

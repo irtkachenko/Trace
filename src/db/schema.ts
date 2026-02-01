@@ -55,11 +55,11 @@ export const messages = pgTable('messages', {
     .references(() => users.id, { onDelete: 'cascade' }),
   content: text('content'),
   attachments: jsonb('attachments').$type<Attachment[]>().notNull().default([]),
-  
   reply_to_id: uuid('reply_to_id')
     .references((): AnyPgColumn => messages.id, { onDelete: 'set null' }),
   
   created_at: timestamp('created_at').notNull().defaultNow(),
+  updated_at: timestamp('updated_at'),
 }, (table) => ({
   // КРИТИЧНО: Пришвидшує рендер чату та сортування за часом
   chatCreatedIdx: index('idx_messages_chat_created').on(table.chat_id, table.created_at),

@@ -221,6 +221,7 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
                         false;
                     })()
                   }
+                  isEditing={editingMessage?.id === message.id}
                   onReply={handleReply}
                   onEdit={handleEdit}
                   onDelete={setMessageToDelete}

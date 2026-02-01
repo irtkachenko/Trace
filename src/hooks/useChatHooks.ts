@@ -174,7 +174,7 @@ export function useMessages(chatId: string) {
          * Використовуємо 'replyTo:reply_to_id(*)' замість імені ключа fkey.
          * Додаємо joined user data для оптимізації (використовуємо подвійні лапки оскільки 'user' - зарезервоване слово)
          */
-        .select('*, reply_to:reply_to_id(*), "user":sender_id(id, name, image)')
+        .select('*, reply_to:reply_to_id(*), "user":sender_id(id, name, image), updated_at')
         .eq('chat_id', chatId)
         .order('created_at', { ascending: false })
         .limit(50)
