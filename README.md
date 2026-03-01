@@ -1,89 +1,83 @@
-# 🚀 Trace Project Template
+# Trace
 
-Стабільний, високопродуктивний шаблон для сучасних веб-додатків на базі **Next.js 15** та **React 19**. Побудований з акцентом на "залізобетонну" архітектуру, швидкість розробки (DX) та повну ізоляцію середовища.
+Веб-додаток на базі Next.js 15 та React 19. Шаблон для створення веб-проектів з функціоналом авторизації та роботи з даними.
 
-## 🛠 Технологічний стек
-- **Framework:** Next.js 15 (App Router)
-- **Runtime:** React 19 (з увімкненим **React Compiler**)
-- **Language:** TypeScript (Strict mode)
-- **Package Manager:** PNPM (Strict & Deterministic)
-- **Linter/Formatter:** Biome (Rust-based speed) + Next Lint
-- **Containerization:** Docker (Alpine Linux)
-- **Backend:** Supabase (PostgreSQL + Realtime)
+## Опис проекту
 
-## 🏗 Архітектурні особливості
+Шаблон веб-додатку, який включає:
+- Авторизацію через Google
+- Інтерфейс для роботи з даними
+- Підключення до бази даних Supabase
 
-### 1. Ізоляція середовища (Docker)
-Для забезпечення **Cross-Platform Stability** проект запускається в Docker. Це гарантує ідентичність версій Node.js та PNPM незалежно від ОС хоста, запобігаючи помилкам файлової системи Windows.
+## Технології
 
-* **Запуск проекту:** ```bash
-  docker-compose up -d --build
+- **Frontend:** Next.js 15, React 19, TypeScript
+- **База даних:** Supabase (PostgreSQL)
+- **Стилі:** Tailwind CSS
+- **Пакетний менеджер:** PNPM
 
-* **Зупинка проекту:** ```bash
-  docker-compose down
+## Як запустити
 
-* **Встановлення залежностей:** ```bash
-  docker exec -it trace-app pnpm install
+### Варіант 1: Без Docker (простіший)
 
-### 2. Стабільність пакетів (Strict PNPM)
-Проект налаштований через `.npmrc` для запобігання "фантомним залежностям":
-- `shamefully-hoist=false`: Забороняє імпорт бібліотек, які не прописані в `package.json`.
-- `strict-peer-dependencies=true`: Блокує встановлення при конфліктах версій.
-- `engine-strict=true`: Гарантує роботу лише на сумісних версіях Node.js (>=20).
-- `frozen-lockfile=true`: Забезпечує детермінованість — інсталяція пакетів відбувається строго за лок-файлом без його випадкової зміни.
+1. Встановіть залежності:
+```bash
+pnpm install
+```
 
-### 3. React Compiler
-Використовується експериментальна фіча `reactCompiler: true`. Більше не потрібно вручну використовувати `useMemo` та `useCallback`. Компілятор автоматично оптимізує рендеринг компонентів.
+2. Створіть файл `.env.local` з налаштуваннями (див. нижче)
 
-### 4. Подвійний контроль якості
-Ми об'єднали **Biome** (швидкість) та **Next Lint** (глибина):
-- Biome миттєво виправляє форматування та базові помилки.
-- Next Lint перевіряє специфічні правила фреймворку перед деплоєм.
+3. Запустіть проект:
+```bash
+pnpm dev
+```
 
-## 🚀 Команди розробки
+### Варіант 2: З Docker
+
+1. Запустіть контейнер:
+```bash
+docker-compose up -d --build
+```
+
+2. Встановіть залежності в контейнері:
+```bash
+docker exec -it trace-app pnpm install
+```
+
+3. Зупиніть проект:
+```bash
+docker-compose down
+```
+
+## Корисні команди
 
 | Команда | Опис |
 | :--- | :--- |
-| `pnpm setup` | **Безпечне встановлення.** Використовує `--frozen-lockfile`, гарантуючи ідентичність версій. |
-| `pnpm dev` | Запуск сервера розробки з двигуном **Turbopack** (максимальна швидкість). |
-| `pnpm format` | Швидке виправлення стилю коду через Biome. |
-| `pnpm check` | **Повна перевірка:** Biome + Next Lint. Виконувати перед кожним commit-ом. |
-| `pnpm build` | Збірка проекту для продакшну. |
-| `pnpm add-pkg` | Аліас для `pnpm add`. Використовувати для додавання нових залежностей. |
+| `pnpm dev` | Запуск сервера розробки |
+| `pnpm build` | Збірка проекту |
+| `pnpm format` | Форматування коду |
+| `pnpm lint` | Перевірка коду на помилки |
 
-## ⚙️ Налаштування оточення
+## Налаштування
 
-Створіть файл `.env.local` у корені проекту:
-
-```ini
-NEXT_PUBLIC_SUPABASE_URL=your_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
-
-
-## 🔐 Налаштування авторизації (Google OAuth)
-
-Для роботи входу через Google необхідно налаштувати проект у [Google Cloud Console](https://console.cloud.google.com/).
-
-### 1. Google Cloud Platform
-- Створіть новий проект з назвою **Trace**.
-- Перейдіть у **APIs & Services > OAuth consent screen**:
-  - Тип: **External**.
-  - Додайте свою пошту в **Test Users** (обов'язково для режиму розробки).
-- Перейдіть у **Credentials**:
-  - Натисніть **Create Credentials > OAuth client ID**.
-  - Тип додатку: **Web application**.
-  - Authorized redirect URIs: `http://localhost:3000/api/auth/callback/google`
-
-### 2. Змінні оточення (.env.local)
-Створіть файл `.env.local` у корені проекту та додайте наступні ключі:
+Створіть файл `.env.local` у корені проекту з такими змінними:
 
 ```env
-# Google OAuth Keys
-AUTH_GOOGLE_ID=ваш_client_id_з_google_console
-AUTH_GOOGLE_SECRET=ваш_client_secret_з_google_console
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_key
 
-# Auth.js Config
-# Згенеруйте секрет командою: npx auth secret
-AUTH_SECRET=ваш_згенерований_секрет
+# Google OAuth (якщо потрібна авторизація через Google)
+AUTH_GOOGLE_ID=your_google_client_id
+AUTH_GOOGLE_SECRET=your_google_client_secret
+AUTH_SECRET=your_auth_secret
 NEXTAUTH_URL=http://localhost:3000
 ```
+
+### Як налаштувати Google OAuth
+
+1. Перейдіть в [Google Cloud Console](https://console.cloud.google.com/)
+2. Створіть новий проект
+3. Налаштуйте OAuth consent screen (External тип)
+4. Створіть OAuth client ID для Web application
+5. Додайте redirect URI: `http://localhost:3000/api/auth/callback/google`
