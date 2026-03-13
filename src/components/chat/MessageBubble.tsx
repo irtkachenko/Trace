@@ -244,11 +244,6 @@ export default function MessageBubble({
               </ContextMenuItem>
               <ContextMenuItem
                 onClick={() => {
-                  console.log('MessageBubble delete clicked:', {
-                    messageId: message.id,
-                    senderId: message.sender_id,
-                    messageContent: message.content?.substring(0, 50) + '...',
-                  });
                   onDelete(message.id);
                 }}
                 className="gap-2 text-red-400 focus:text-red-400 focus:bg-red-500/10"

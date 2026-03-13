@@ -125,8 +125,6 @@ function setupChannel(
       queryClient.invalidateQueries({ queryKey: ['chats'], exact: false });
     })
     .subscribe(async (status: string) => {
-      console.log('Presence channel status:', status);
-
       switch (status) {
         case 'SUBSCRIBED':
           setConnectionState('CONNECTED');
@@ -151,9 +149,6 @@ function setupChannel(
             setConnectionState('RECONNECTING');
 
             setTimeout(() => {
-              console.log(
-                `Attempting to reconnect presence (${manager.reconnectAttempts}/${manager.maxReconnectAttempts})`,
-              );
               if (manager.channel && manager.subscribers > 0) {
                 setupChannel(manager, userId, setOnlineUsers, setConnectionState);
               }
@@ -212,7 +207,6 @@ export function usePresenceSubscription(user: User | null) {
 
       // Setup channel if not already done
       if (!presenceManager.channel && presenceManager.subscribers === 1) {
-        console.log('Setting up presence channel for user:', user.id);
         setupChannel(presenceManager, user.id, setOnlineUsers, setConnectionState);
 
         // Add global event listeners
@@ -220,14 +214,12 @@ export function usePresenceSubscription(user: User | null) {
         window.addEventListener('beforeunload', updateLastSeen);
       }
 
-      console.log(`Presence subscribers: ${presenceManager.subscribers}`);
-    },
+      },
 
     unsubscribe: () => {
       if (!presenceManager) return;
 
       presenceManager.subscribers--;
-      console.log(`Presence subscribers: ${presenceManager.subscribers}`);
 
       // Cleanup when no more subscribers
       if (presenceManager.subscribers <= 0) {
@@ -244,8 +236,6 @@ export function usePresenceSubscription(user: User | null) {
 // Global cleanup function
 function cleanupPresence(): void {
   if (!presenceManager) return;
-
-  console.log('Cleaning up presence channel');
 
   // Clear debounce timer
   if (presenceManager.debounceTimer) {

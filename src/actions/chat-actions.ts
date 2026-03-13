@@ -1,11 +1,20 @@
 'use server';
 
+import { z } from 'zod';
 import { and, eq, or } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { db } from '@/db';
 import { chats, users } from '@/db/schema';
 import { createClient } from '@/lib/supabase/server';
+
+// --- Zod-схеми валідації (CRIT-07) ---
+const targetUserIdSchema = z.string().uuid('targetUserId must be a valid UUID');
+
+const markAsReadInputSchema = z.object({
+  chatId: z.string().uuid('chatId must be a valid UUID'),
+  messageId: z.string().uuid('messageId must be a valid UUID'),
+});
 
 /**
  * Отримує поточного користувача із Supabase SSR та синхронізує його з нашою БД Drizzle.
@@ -14,18 +23,15 @@ async function getCurrentUser() {
   try {
     const supabase = await createClient();
 
-    // 1. Спочатку отримуємо сесію (getSession надійніша для початкової перевірки в SSR)
+    // 1. Отримуємо юзера (getUser надійніший для безпеки на сервері)
     const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-    if (sessionError || !session?.user) {
+    if (userError || !user) {
       return null;
     }
-
-    // 2. Для безпеки отримуємо свіжі дані користувача
-    const user = session.user;
 
     // Безпечне отримання метаданих (додав додаткові перевірки)
     const userName =
@@ -66,8 +72,20 @@ async function getCurrentUser() {
 }
 
 export async function getOrCreateChatAction(targetUserId: string) {
+  // CRIT-07: Валідація вхідного параметра
+  const parsed = targetUserIdSchema.safeParse(targetUserId);
+  if (!parsed.success) {
+    console.error('Invalid targetUserId:', parsed.error.flatten());
+    return null;
+  }
+
   const user = await getCurrentUser();
   if (!user?.id) {
+    return null;
+  }
+
+  // Захист від створення чату з самим собою
+  if (user.id === parsed.data) {
     return null;
   }
 
@@ -115,6 +133,12 @@ export async function getOrCreateChatAction(targetUserId: string) {
 }
 
 export async function markAsReadAction(chatId: string, messageId: string) {
+  // CRIT-07: Валідація вхідних параметрів
+  const parsed = markAsReadInputSchema.safeParse({ chatId, messageId });
+  if (!parsed.success) {
+    return { success: false, error: 'validation_error' };
+  }
+
   const user = await getCurrentUser();
   if (!user?.id) {
     return { success: false, error: 'unauthorized' };

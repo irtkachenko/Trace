@@ -1,6 +1,6 @@
 'use client';
 
-import { createBrowserClient } from '@supabase/ssr';
+import { createClient } from '@/lib/supabase/client';
 import type { AuthChangeEvent, Session, User, SupabaseClient } from '@supabase/supabase-js';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useGlobalRealtime } from '@/hooks/useGlobalRealtime';
@@ -22,22 +22,14 @@ export const useSupabaseAuth = () => useContext(AuthContext);
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [supabase] = useState(() =>
-    createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-    ),
-  );
+  const [supabase] = useState(() => createClient());
 
   // Memoize the auth state change handler to prevent unnecessary re-renders
   const handleAuthStateChange = useCallback((event: AuthChangeEvent, session: Session | null) => {
-    console.log('Auth state changed:', event, session?.user?.id);
-
     // Only update loading state on initial auth events
     if (event === 'INITIAL_SESSION') {
       setLoading(false);
     }
-
     setUser(session?.user ?? null);
   }, []);
 
@@ -48,16 +40,18 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     const initializeAuth = async () => {
       try {
         const {
-          data: { session },
+          data: { user },
           error,
-        } = await supabase.auth.getSession();
+        } = await supabase.auth.getUser();
 
         if (!mounted) return;
 
         if (error) {
-          console.error('Error getting initial session:', error);
+          console.error('Error getting initial user:', error);
+          setLoading(false);
         } else {
-          handleAuthStateChange('INITIAL_SESSION', session);
+          // Ми передаємо об'єкт схожий на сесію для сумісності з існуючим хендлером
+          handleAuthStateChange('INITIAL_SESSION', user ? { user } as any : null);
         }
       } catch (error) {
         console.error('Error during auth initialization:', error);
