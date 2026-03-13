@@ -15,9 +15,9 @@ import {
   useChatTyping,
   useDeleteMessage,
   useMessages,
-  usePresence,
   useScrollToMessage,
-} from '@/hooks/useChatHooks';
+} from '@/hooks/chat';
+import { usePresence } from '@/hooks/user';
 import { formatRelativeTime, getSafeTimestamp } from '@/lib/date-utils';
 import type { Message, User } from '@/types';
 

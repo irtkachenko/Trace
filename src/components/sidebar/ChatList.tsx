@@ -13,7 +13,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { useChats, useDeleteChat } from '@/hooks/useChatHooks';
+import { useChats, useDeleteChat } from '@/hooks/chat';
 import { formatRelativeTime } from '@/lib/date-utils';
 import { PresenceIndicator } from './PresenceIndicator';
 

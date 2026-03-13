@@ -9,8 +9,12 @@ export function createClient() {
   // Повертаємо існуючий клієнт, якщо він уже створений у браузері
   if (typeof window !== 'undefined' && client) return client;
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase environment variables are missing');
+  }
 
   const newClient = createBrowserClient(supabaseUrl, supabaseAnonKey, {
     global: {
@@ -43,3 +47,5 @@ export function createClient() {
   if (typeof window !== 'undefined') client = newClient;
   return newClient;
 }
+
+export const supabase = createClient();

@@ -2,7 +2,7 @@
 
 import { Loader2, User as UserIcon } from 'lucide-react';
 import { memo, useState } from 'react';
-import { useSearchUsers } from '@/hooks/useChatHooks';
+import { useSearchUsers } from '@/hooks/contacts';
 import { ContactItem } from './ContactItem';
 
 interface ContactsListProps {

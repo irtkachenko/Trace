@@ -179,7 +179,6 @@ export function useChatRealtime(chatId: string | null, user: User | null) {
     if (channelRef.current) {
       try {
         supabase.removeChannel(channelRef.current);
-        console.log(`Unsubscribed from chat ${chatId} realtime updates`);
       } catch (error) {
         console.error('Error removing realtime channel:', error);
       } finally {
@@ -479,10 +478,6 @@ export function useChatRealtime(chatId: string | null, user: User | null) {
       )
       .subscribe(async (status: string) => {
         if (!mountedRef.current) return;
-
-        if (status === 'SUBSCRIBED') {
-          console.log(`Subscribed to chat ${chatId} realtime updates`);
-        }
 
         if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           console.warn(`Chat ${chatId} realtime subscription closed:`, status);

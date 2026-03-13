@@ -5,7 +5,6 @@ import { defineConfig } from 'drizzle-kit';
 dotenv.config({
   path: '.env.local',
 });
-console.log("--- DEBUG: Чи знайдено файл? ---", process.env.DATABASE_URL ? "ТАК" : "НІ");
 
 const dbUrl = process.env.DATABASE_URL;
 
