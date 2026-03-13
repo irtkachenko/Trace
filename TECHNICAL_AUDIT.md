@@ -10,7 +10,6 @@
 ## 📋 Зміст
 
 1. [Загальна оцінка](#1-загальна-оцінка)
-2. [� СЕРЙОЗНІ проблеми](#3--серйозні-проблеми)
 3. [🟡 СЕРЕДНІ проблеми](#4--середні-проблеми)
 4. [🔵 РЕКОМЕНДАЦІЇ з масштабування](#5--рекомендації-з-масштабування)
 5. [📐 Архітектурні зауваження](#6--архітектурні-зауваження)
@@ -33,47 +32,6 @@
 
 **Загальна оцінка: 6.1 / 10** — критичні проблеми виправлені, проект готовий до development.
 
-
-### HIGH-08: Неконтрольоване розповсюдження `queryClient.invalidateQueries`
-
-Багато мутацій роблять `invalidateQueries` **після** оптимістичного оновлення, що спричиняє подвійне оновлення UI та "мигання" даних:
-
-```typescript
-// useSendMessage → onSuccess:
-// Оптимістичне оновлення вже зроблено в onMutate
-// А потім ще й invalidate який скасує оптимістичне оновлення
-
-// useMarkAsRead:
-onSuccess: (_, { chatId }) => {
-  queryClient.invalidateQueries({ queryKey: ['chats'] });  // ← Перезапитує ВСІ чати
-  queryClient.invalidateQueries({ queryKey: ['chat', chatId] }); // ← І конкретний
-};
-```
-
----
-
-### HIGH-09: `wdyr.ts` в продакшн-лейауті
-
-**Файл:** `src/app/layout.tsx` (рядок 1)
-
-```typescript
-import '@/wdyr'; // why-did-you-render — дев-інструмент імпортується ПЕРШИМ у ROOT layout
-```
-
-Хоч `wdyr.ts` має перевірку `process.env.NODE_ENV === 'development'`, сам **модуль** (`@welldone-software/why-did-you-render`) все одно потрапляє в production bundle, збільшуючи його розмір.
-
----
-
-### HIGH-10: Конфлікт `visibilitychange` — подвійний cleanup
-
-У проекті **два окремі компоненти** слухають `visibilitychange` і обидва викликають `cleanupPresence()`:
-
-1. `GlobalCleanup.tsx` (рядок 18-21) — викликає `cleanupPresence()` при hidden
-2. `usePresenceStore.ts` (рядок 219) — реєструє `handleVisibilityChange` який робить `updateLastSeen()`
-
-Переключення вкладки вбиває **всі** realtime-підключення через `cleanupPresence()`, а потім їх треба заново створити коли вкладка стає активною (чого немає в коді).
-
----
 
 ## 4. 🟡 СЕРЕДНІ проблеми
 
@@ -121,17 +79,7 @@ export const users = pgTable('user', { ... });
 
 ---
 
-### MED-04: Відсутній `Suspense` для `useSearchParams()`
 
-**Файл:** `src/components/sidebar/SidebarShell.tsx` (рядок 13)
-
-```typescript
-const searchParams = useSearchParams();
-```
-
-Починаючи з Next.js 14+, `useSearchParams()` має бути обгорнутий в `<Suspense>`, інакше вся сторінка деоптимізується до client-side rendering.
-
----
 
 ### MED-05: `accept` у file input не відповідає `storage.config`
 

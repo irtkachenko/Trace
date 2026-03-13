@@ -55,9 +55,5 @@ export function useMarkAsRead() {
         queryClient.setQueryData(['chats'], context.previousChats);
       }
     },
-    onSuccess: (_, { chatId }) => {
-      queryClient.invalidateQueries({ queryKey: ['chats'] });
-      queryClient.invalidateQueries({ queryKey: ['chat', chatId] });
-    },
   });
 }

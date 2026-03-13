@@ -2,7 +2,7 @@
 
 import { MessageSquare, Users } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { memo, useEffect } from 'react';
+import { memo, useEffect, Suspense } from 'react';
 import { ChatList } from './ChatList';
 import { ContactItem } from './ContactItem';
 import { ContactsList } from './ContactsList';
@@ -95,4 +95,10 @@ function SidebarShellBase() {
   );
 }
 
-export const SidebarShell = memo(SidebarShellBase);
+export const SidebarShell = memo(function SidebarShellWrapper() {
+  return (
+    <Suspense fallback={<div className="w-80 h-screen bg-black/40 border-r border-white/10 animate-pulse" />}>
+      <SidebarShellBase />
+    </Suspense>
+  );
+});
