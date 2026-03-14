@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
+import { AuthError, NetworkError } from '@/shared/lib/errors';
 import type { FullChat } from '@/types';
 
 /**
@@ -13,13 +14,18 @@ export function useMarkAsRead() {
 
   return useMutation({
     mutationFn: async ({ chatId, messageId }: { chatId: string; messageId: string }) => {
-      if (!user?.id) throw new Error('User not authenticated');
+      if (!user?.id) throw new AuthError('User not authenticated', 'MARK_READ_AUTH_REQUIRED', 401);
 
       const { markAsReadAction } = await import('@/actions/chat-actions');
       const result = await markAsReadAction(chatId, messageId);
 
       if (!result.success) {
-        throw new Error(result.error || 'Failed to mark as read');
+        throw new NetworkError(
+          result.error || 'Failed to mark as read',
+          'markAsRead',
+          'MARK_READ_ERROR',
+          500,
+        );
       }
 
       return result;

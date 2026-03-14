@@ -1,8 +1,10 @@
 'use client';
 
 import { useMutation } from '@tanstack/react-query';
-import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { userApi } from '@/api';
+import { useSupabaseAuth } from '@/components/auth/AuthProvider';
+import { handleError } from '@/shared/lib/error-handler';
+import { NetworkError } from '@/shared/lib/errors';
 
 /**
  * Хук для оновлення статусу "востаннє в мережі".
@@ -16,7 +18,15 @@ export function useUpdateLastSeen() {
       return await userApi.updateLastSeen();
     },
     onError: (error) => {
-      console.error('Помилка оновлення статусу присутності:', error);
+      handleError(
+        new NetworkError(
+          'Помилка оновлення статусу присутності',
+          'updateLastSeen',
+          'UPDATE_LAST_SEEN_ERROR',
+          500,
+        ),
+        'UpdateLastSeen',
+      );
     },
   });
 }

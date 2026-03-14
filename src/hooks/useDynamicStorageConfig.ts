@@ -2,12 +2,12 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { storageApi } from '@/api';
 import {
   getFileTypeCategory,
   isAllowedFileExtension,
   storageConfig,
 } from '@/config/storage.config';
-import { storageApi } from '@/api';
 
 interface StoragePolicies {
   maxFileSize: number;
@@ -29,7 +29,7 @@ export function useDynamicStorageConfig() {
       try {
         // Get storage config from API
         const config = await storageApi.getStorageConfig();
-        
+
         // Use defaults since StorageConfig doesn't have these properties
         return DEFAULT_POLICIES;
       } catch (error) {

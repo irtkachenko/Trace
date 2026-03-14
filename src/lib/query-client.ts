@@ -1,5 +1,5 @@
 import { MutationCache, QueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { createQueryErrorHandler, getRetryDelay, shouldRetry } from '@/shared/lib/error-handler';
 
 // Create a single, shared QueryClient instance for the entire application
 export const queryClient = new QueryClient({
@@ -8,9 +8,7 @@ export const queryClient = new QueryClient({
       // If the error has a 'status' property, it was likely handled by the Supabase fetch interceptor
       // We only want to toast for client-side errors or unexpected issues here.
       if (!error?.status) {
-        toast.error('Error', {
-          description: error.message || 'An unexpected error occurred.',
-        });
+        createQueryErrorHandler('QueryClient')(error);
       }
     },
   }),
@@ -20,7 +18,10 @@ export const queryClient = new QueryClient({
       // Захист від зайвих запитів при помилці авторизації
       retry: (failureCount, error: Error & { status?: number }) => {
         if (error?.status === 401) return false;
-        return failureCount < 3;
+        return shouldRetry(error) && failureCount < 3;
+      },
+      retryDelay: (attemptIndex, error: Error & { status?: number }) => {
+        return getRetryDelay(attemptIndex + 1, error);
       },
     },
   },

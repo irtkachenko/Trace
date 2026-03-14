@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { storageApi } from '@/api';
+import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { fileUploadSchema, singleFileSchema } from '@/lib/validations/chat';
+import { handleError } from '@/shared/lib/error-handler';
+import { AuthError, NetworkError, ValidationError } from '@/shared/lib/errors';
 import type { Attachment } from '@/types';
 
 export interface SelectedFile {
@@ -48,8 +50,10 @@ export function useLocalFileSelection() {
     });
 
     if (!fileValidation.success) {
-      const errorMessages = fileValidation.error.issues.map((err: { message: string }) => err.message).join(', ');
-      return { valid: false, error: errorMessages };
+      const errorMessages = fileValidation.error.issues
+        .map((err: { message: string }) => err.message)
+        .join(', ');
+      throw new ValidationError(errorMessages, 'file', 'FILE_VALIDATION_ERROR', 400);
     }
 
     return { valid: true };
@@ -57,7 +61,10 @@ export function useLocalFileSelection() {
 
   const addFiles = async (files: FileList | File[]) => {
     if (!user) {
-      toast.error('You must be logged in to select files');
+      handleError(
+        new AuthError('You must be logged in to select files', 'FILE_SELECT_AUTH_REQUIRED', 401),
+        'LocalFileSelection',
+      );
       return;
     }
 
@@ -66,7 +73,15 @@ export function useLocalFileSelection() {
     // Check total file count limit (max 5 files)
     const currentFileCount = selectedFiles.length;
     if (currentFileCount + fileArray.length > 5) {
-      toast.error('Cannot select more than 5 files');
+      handleError(
+        new ValidationError(
+          'Cannot select more than 5 files',
+          'fileCount',
+          'FILE_COUNT_LIMIT',
+          400,
+        ),
+        'LocalFileSelection',
+      );
       return;
     }
 
@@ -75,7 +90,15 @@ export function useLocalFileSelection() {
     for (const file of fileArray) {
       const validation = validateFile(file);
       if (!validation.valid) {
-        toast.error(`${file.name}: ${validation.error}`);
+        handleError(
+          new ValidationError(
+            validation.error || 'Invalid file',
+            file.name,
+            'FILE_VALIDATION_ERROR',
+            400,
+          ),
+          'LocalFileSelection',
+        );
         continue;
       }
 
@@ -131,7 +154,7 @@ export function useLocalFileSelection() {
 
   const uploadFiles = async (chatId: string): Promise<Attachment[]> => {
     if (!user) {
-      throw new Error('You must be logged in to upload files');
+      throw new AuthError('You must be logged in to upload files', 'UPLOAD_AUTH_REQUIRED', 401);
     }
 
     const uploadedAttachments: Attachment[] = [];
@@ -184,7 +207,11 @@ export function useLocalFileSelection() {
         uploadedAttachments.push(attachment);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Upload failed';
-        toast.error(`${selectedFile.file.name}: ${errorMessage}`);
+        const appError =
+          error instanceof ValidationError
+            ? error
+            : new NetworkError(errorMessage, selectedFile.file.name, 'FILE_UPLOAD_ERROR', 500);
+        handleError(appError, 'LocalFileSelection');
         // Continue with other files even if one fails
       }
     }

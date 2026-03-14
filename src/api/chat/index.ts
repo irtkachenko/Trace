@@ -1,2 +1,2 @@
-export * from './messages.api';
 export * from './chats.api';
+export * from './messages.api';

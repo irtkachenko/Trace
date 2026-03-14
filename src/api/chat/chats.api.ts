@@ -1,11 +1,15 @@
 import { supabase } from '@/lib/supabase/client';
+import { handleError } from '@/shared/lib/error-handler';
+import { NetworkError } from '@/shared/lib/errors';
 import type { FullChat } from '@/types';
 
 export const chatsApi = {
   /**
-   * Отримання списку чатів поточного користувача
+   * Отримання списку чатів поточного користувача з пагінацією
    */
-  getChats: async (userId: string) => {
+  getChats: async (userId: string, page = 1, limit = 20) => {
+    const offset = (page - 1) * limit;
+
     const { data, error } = await supabase
       .from('chats')
       .select(`
@@ -23,11 +27,18 @@ export const chatsApi = {
       `)
       .or(`user_id.eq.${userId},recipient_id.eq.${userId}`)
       .order('created_at', { foreignTable: 'messages', ascending: false })
-      .limit(1, { foreignTable: 'messages' });
+      .limit(1, { foreignTable: 'messages' })
+      .range(offset, offset + limit - 1);
 
     if (error) {
-      console.error('Помилка запиту чатів:', error.message);
-      throw error;
+      const networkError = new NetworkError(
+        error.message,
+        'chats',
+        'CHATS_LOAD_ERROR',
+        error.status || 500,
+      );
+      handleError(networkError, 'ChatsApi.getChats');
+      throw networkError;
     }
 
     const normalizedChats = data as FullChat[];
@@ -41,12 +52,16 @@ export const chatsApi = {
   },
 
   /**
+   * Отримання чатів для infinite query
+   */
+  getChatsInfinite: async (userId: string, pageParam = 1, limit = 20) => {
+    return chatsApi.getChats(userId, pageParam, limit);
+  },
+
+  /**
    * Створення нового чату
    */
-  createChat: async (payload: {
-    user_id: string;
-    recipient_id: string;
-  }) => {
+  createChat: async (payload: { user_id: string; recipient_id: string }) => {
     const { data, error } = await supabase
       .from('chats')
       .insert(payload)
@@ -73,10 +88,13 @@ export const chatsApi = {
   /**
    * Оновлення чату
    */
-  updateChat: async (chatId: string, payload: Partial<{
-    title: string;
-    updated_at: string;
-  }>) => {
+  updateChat: async (
+    chatId: string,
+    payload: Partial<{
+      title: string;
+      updated_at: string;
+    }>,
+  ) => {
     const { data, error } = await supabase
       .from('chats')
       .update({ ...payload, updated_at: new Date().toISOString() })

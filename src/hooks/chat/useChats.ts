@@ -1,24 +1,37 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-import { useSupabaseAuth } from '@/components/auth/AuthProvider';
+import { type InfiniteData, useInfiniteQuery } from '@tanstack/react-query';
 import { chatsApi } from '@/api';
+import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import type { FullChat } from '@/types';
 
 /**
- * Хук для отримання списку чатів поточного користувача.
+ * Хук для отримання списку чатів поточного користувача з підтримкою нескінченної пагінації.
  * Реалізовано як сінглтон через React Query кеш.
  */
 export function useChats() {
   const { user } = useSupabaseAuth();
 
-  return useQuery({
+  return useInfiniteQuery<
+    FullChat[],
+    Error,
+    InfiniteData<FullChat[]>,
+    string[],
+    number | undefined
+  >({
     queryKey: ['chats'],
-    queryFn: async () => {
+    queryFn: ({ pageParam = 1 }) => {
       if (!user) return [];
-
-      return await chatsApi.getChats(user.id);
+      return chatsApi.getChatsInfinite(user.id, pageParam);
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      // Якщо остання сторінка менша за ліміт, то це кінець
+      if (lastPage.length < 20) return undefined;
+      // Інакше повертаємо номер наступної сторінки
+      return allPages.length + 1;
     },
     enabled: !!user,
+    refetchOnWindowFocus: false,
   });
 }

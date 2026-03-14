@@ -1,10 +1,17 @@
 'use client';
 
-import type { AuthChangeEvent, Session, SupabaseClient, User as SupabaseUser } from '@supabase/supabase-js';
+import type {
+  AuthChangeEvent,
+  Session,
+  SupabaseClient,
+  User as SupabaseUser,
+} from '@supabase/supabase-js';
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useGlobalRealtime } from '@/hooks/useGlobalRealtime';
 import { createClient } from '@/lib/supabase/client';
-import { AppUser, UserUtils } from '@/types/auth';
+import { handleError } from '@/shared/lib/error-handler';
+import { AuthError, DatabaseError } from '@/shared/lib/errors';
+import { type AppUser, UserUtils } from '@/types/auth';
 
 interface AuthContextType {
   user: AppUser | null;
@@ -44,7 +51,10 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   // Функція для оновлення даних користувача
   const refreshUser = useCallback(async () => {
-    const { data: { user }, error } = await supabase.auth.getUser();
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
     if (!error && user) {
       setSupabaseUser(user);
       normalizeUser(user);
@@ -52,20 +62,23 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   }, [supabase, normalizeUser]);
 
   // Обробник зміни стану автентифікації
-  const handleAuthStateChange = useCallback(async (event: AuthChangeEvent, session: Session | null) => {
-    if (event === 'INITIAL_SESSION') {
-      setLoading(false);
-    }
-    
-    const currentUser = session?.user ?? null;
-    setSupabaseUser(currentUser);
-    
-    if (currentUser) {
-      normalizeUser(currentUser);
-    } else {
-      setUser(null);
-    }
-  }, [normalizeUser]);
+  const handleAuthStateChange = useCallback(
+    async (event: AuthChangeEvent, session: Session | null) => {
+      if (event === 'INITIAL_SESSION') {
+        setLoading(false);
+      }
+
+      const currentUser = session?.user ?? null;
+      setSupabaseUser(currentUser);
+
+      if (currentUser) {
+        normalizeUser(currentUser);
+      } else {
+        setUser(null);
+      }
+    },
+    [normalizeUser],
+  );
 
   // Ініціалізація
   useEffect(() => {
@@ -81,13 +94,19 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         if (!mounted) return;
 
         if (error) {
-          console.error('Error getting initial user:', error);
+          handleError(
+            new AuthError(error.message, 'INITIAL_USER_ERROR', error.status),
+            'AuthProvider',
+          );
           setLoading(false);
         } else {
           handleAuthStateChange('INITIAL_SESSION', user ? ({ user } as Session) : null);
         }
       } catch (error) {
-        console.error('Error during auth initialization:', error);
+        handleError(
+          new DatabaseError('Error during auth initialization', 'authInit', 'AUTH_INIT_ERROR', 500),
+          'AuthProvider',
+        );
         if (mounted) {
           setLoading(false);
         }

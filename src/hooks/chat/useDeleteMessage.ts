@@ -3,6 +3,8 @@
 import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { handleError } from '@/shared/lib/error-handler';
+import { NetworkError } from '@/shared/lib/errors';
 import type { Message } from '@/types';
 
 /**
@@ -37,11 +39,16 @@ export function useDeleteMessage(chatId: string) {
 
       return { previousData };
     },
-    onError: (error: Error, _messageId, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(['messages', chatId], context.previousData);
-      }
-      toast.error('Помилка видалення', { description: error.message });
+    onError: (error: Error & { status?: number }) => {
+      handleError(
+        new NetworkError(
+          error.message,
+          'deleteMessage',
+          'DELETE_MESSAGE_ERROR',
+          error.status || 500,
+        ),
+        'DeleteMessage',
+      );
     },
     onSuccess: () => {
       toast.success('Повідомлення видалено');

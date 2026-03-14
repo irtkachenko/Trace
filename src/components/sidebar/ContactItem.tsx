@@ -8,6 +8,8 @@ import { getOrCreateChatAction } from '@/actions/chat-actions';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { formatRelativeTime } from '@/lib/date-utils';
 import { cn } from '@/lib/utils';
+import { handleError } from '@/shared/lib/error-handler';
+import { NetworkError } from '@/shared/lib/errors';
 import type { User } from '@/types';
 
 import { PresenceIndicator } from './PresenceIndicator';
@@ -41,7 +43,15 @@ function ContactItemBase({ user, disabled, onActionStart, onActionEnd }: Contact
 
         // If successful, the redirect will happen in the server action
       } catch (error) {
-        console.error('Unexpected error:', error);
+        handleError(
+          new NetworkError(
+            'Unexpected error during chat creation',
+            'chatCreation',
+            'CHAT_CREATION_ERROR',
+            500,
+          ),
+          'ContactItem',
+        );
       } finally {
         onActionEnd?.();
       }

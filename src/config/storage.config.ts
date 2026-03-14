@@ -114,10 +114,17 @@ export const storageConfig: StorageConfig = {
 
 // Helper functions for working with storage config
 
+import { ConfigError } from '@/shared/lib/errors';
+
+// Helper functions for working with storage config
+
 export function getBucketConfig(bucketName: string) {
   const bucket = Object.values(storageConfig.buckets).find((b) => b.name === bucketName);
   if (!bucket) {
-    throw new Error(`Bucket configuration not found for: ${bucketName}`);
+    throw new ConfigError(
+      `Bucket configuration not found for: ${bucketName}`,
+      'BUCKET_CONFIG_NOT_FOUND',
+    );
   }
   return bucket;
 }

@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useSupabaseAuth } from '@/components/auth/AuthProvider';
-import { realtimeApi } from '@/api';
 import type { RealtimeChannel, RealtimePresenceState } from '@supabase/supabase-js';
+import { useEffect, useRef, useState } from 'react';
+import { realtimeApi } from '@/api';
+import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 
 interface TypingPresence {
   isTyping: boolean;

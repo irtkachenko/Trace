@@ -3,6 +3,8 @@
 import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { handleError } from '@/shared/lib/error-handler';
+import { NetworkError } from '@/shared/lib/errors';
 import type { Message } from '@/types';
 
 /**
@@ -20,7 +22,13 @@ export function useEditMessage(chatId: string) {
         .select('*, reply_to:reply_to_id(*)')
         .single();
 
-      if (error) throw error;
+      if (error)
+        throw new NetworkError(
+          error.message,
+          'messages',
+          'EDIT_MESSAGE_ERROR',
+          error.status || 500,
+        );
       return data;
     },
     onMutate: async (newEdit) => {
@@ -43,11 +51,11 @@ export function useEditMessage(chatId: string) {
 
       return { previousData };
     },
-    onError: (error: Error, _, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(['messages', chatId], context.previousData);
-      }
-      toast.error(`Помилка редагування: ${error.message}`);
+    onError: (error: Error & { status?: number }) => {
+      handleError(
+        new NetworkError(error.message, 'editMessage', 'EDIT_MESSAGE_ERROR', error.status || 500),
+        'EditMessage',
+      );
     },
     onSuccess: () => {
       toast.success('Повідомлення відредаговано');

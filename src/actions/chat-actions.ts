@@ -6,7 +6,10 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { db } from '@/db';
 import { chats, users } from '@/db/schema';
+import { rateLimit } from '@/lib/rate-limiter';
 import { createClient } from '@/lib/supabase/server';
+import { handleError } from '@/shared/lib/error-handler';
+import { DatabaseError, ValidationError } from '@/shared/lib/errors';
 
 // --- Zod-схеми валідації (CRIT-07) ---
 const targetUserIdSchema = z.string().uuid('targetUserId must be a valid UUID');
@@ -35,7 +38,15 @@ async function getCurrentUser() {
 
     return user;
   } catch (err) {
-    console.error('Critical error in getCurrentUser:', err);
+    handleError(
+      new DatabaseError(
+        'Critical error in getCurrentUser',
+        'getCurrentUser',
+        'GET_CURRENT_USER_ERROR',
+        500,
+      ),
+      'ChatActions',
+    );
     return null;
   }
 }
@@ -44,12 +55,25 @@ export async function getOrCreateChatAction(targetUserId: string) {
   // CRIT-07: Валідація вхідного параметра
   const parsed = targetUserIdSchema.safeParse(targetUserId);
   if (!parsed.success) {
-    console.error('Invalid targetUserId:', parsed.error.flatten());
+    handleError(
+      new ValidationError(
+        `Invalid targetUserId: ${parsed.error.flatten().formErrors.join(', ')}`,
+        'targetUserId',
+        'INVALID_TARGET_USER_ID',
+        400,
+      ),
+      'ChatActions',
+    );
     return null;
   }
 
   const user = await getCurrentUser();
   if (!user?.id) {
+    return null;
+  }
+
+  // Rate limiting: 5 чатів за хвилину на юзера
+  if (!rateLimit(`createChat:${user.id}`, { windowMs: 60000, maxRequests: 5 })) {
     return null;
   }
 
@@ -88,7 +112,15 @@ export async function getOrCreateChatAction(targetUserId: string) {
       targetChatId = newChat.id;
     }
   } catch (error) {
-    console.error('Error in getOrCreateChatAction:', error);
+    handleError(
+      new DatabaseError(
+        'Error in getOrCreateChatAction',
+        'getOrCreateChat',
+        'GET_OR_CREATE_CHAT_ERROR',
+        500,
+      ),
+      'ChatActions',
+    );
     return null;
   }
 
@@ -111,6 +143,11 @@ export async function markAsReadAction(chatId: string, messageId: string) {
   const user = await getCurrentUser();
   if (!user?.id) {
     return { success: false, error: 'unauthorized' };
+  }
+
+  // Rate limiting: 10 запитів за хвилину на юзера
+  if (!rateLimit(`markAsRead:${user.id}`, { windowMs: 60000, maxRequests: 10 })) {
+    return { success: false, error: 'rate_limit_exceeded' };
   }
 
   try {
@@ -139,7 +176,10 @@ export async function markAsReadAction(chatId: string, messageId: string) {
 
     return { success: true };
   } catch (error) {
-    console.error('Error in markAsReadAction:', error);
+    handleError(
+      new DatabaseError('Error in markAsReadAction', 'markAsRead', 'MARK_AS_READ_ERROR', 500),
+      'ChatActions',
+    );
     return { success: false, error: 'failed_to_mark_as_read' };
   }
 }

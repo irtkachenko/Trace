@@ -1,6 +1,8 @@
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
+import { handleError } from '@/shared/lib/error-handler';
+import { AuthError, DatabaseError } from '@/shared/lib/errors';
 
 export async function handleSignIn() {
   const supabase = createClient();
@@ -12,7 +14,7 @@ export async function handleSignIn() {
   });
 
   if (error) {
-    console.error('Error signing in:', error.message);
+    throw new AuthError(error.message, 'SIGN_IN_ERROR', error.status);
   }
 }
 
@@ -23,13 +25,21 @@ export async function handleSignOut() {
   try {
     await supabase.rpc('update_last_seen');
   } catch (e) {
-    console.error('Failed to update last seen on sign out', e);
+    handleError(
+      new DatabaseError(
+        'Failed to update last seen on sign out',
+        'update_last_seen',
+        'UPDATE_LAST_SEEN_ERROR',
+        500,
+      ),
+      'Auth',
+    );
   }
 
   const { error } = await supabase.auth.signOut();
 
   if (error) {
-    console.error('Error signing out:', error.message);
+    throw new AuthError(error.message, 'SIGN_OUT_ERROR', error.status);
   } else {
     window.location.href = '/';
   }

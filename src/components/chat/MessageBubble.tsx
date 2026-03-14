@@ -1,7 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import Linkify from 'linkify-react';
 import { Check, CheckCheck, Clock, Download, Edit, FileIcon, Reply, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
 
 import {
   ContextMenu,
@@ -11,6 +10,7 @@ import {
   ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { formatMessageDate } from '@/lib/date-utils';
+import { isValidUrlForLinkify } from '@/lib/sanitize';
 import { cn } from '@/lib/utils';
 import type { Message } from '@/types';
 import MessageMediaGrid from './MessageMediaGrid';
@@ -141,6 +141,9 @@ export default function MessageBubble({
                       rel: 'noopener noreferrer',
                       className:
                         'text-blue-400 hover:text-blue-300 underline underline-offset-4 transition-colors cursor-pointer',
+                      validate: {
+                        url: isValidUrlForLinkify,
+                      },
                     }}
                   >
                     {message.content}

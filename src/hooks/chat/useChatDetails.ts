@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { supabase } from '@/lib/supabase/client';
+import { AuthError, NetworkError } from '@/shared/lib/errors';
 import type { FullChat, User } from '@/types';
 
 /**
@@ -14,7 +15,7 @@ export function useChatDetails(chatId: string) {
   return useQuery({
     queryKey: ['chat', chatId],
     queryFn: async () => {
-      if (!user) throw new Error('Unauthorized');
+      if (!user) throw new AuthError('Unauthorized', 'CHAT_AUTH_REQUIRED', 401);
 
       const { data, error } = await supabase
         .from('chats')
@@ -26,7 +27,8 @@ export function useChatDetails(chatId: string) {
         .eq('id', chatId)
         .single();
 
-      if (error) throw error;
+      if (error)
+        throw new NetworkError(error.message, 'chats', 'CHAT_FETCH_ERROR', error.status || 500);
 
       const normalizedData = data as FullChat;
 

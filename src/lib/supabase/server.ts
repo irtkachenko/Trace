@@ -1,18 +1,16 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
+import { env } from '@/shared/config/env';
+import { ConfigError } from '@/shared/lib/errors';
 
 /**
  * Створює інстанс клієнта Supabase для використання на сервері.
  * Використовує React cache для забезпечення "сінглтона" в межах одного запиту.
  */
 export const createClient = cache(async () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Supabase environment variables are missing');
-  }
+  const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   const cookieStore = await cookies();
 

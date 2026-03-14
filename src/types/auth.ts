@@ -11,12 +11,12 @@ export interface AppUser {
   email_confirmed_at?: string;
   phone?: string;
   user_metadata: UserMetadata;
-  
+
   // Database поля (merged)
   name: string | null;
   image: string | null;
   last_seen: string | null;
-  
+
   // Обчислювані поля
   is_online: boolean;
   display_name: string;
@@ -36,7 +36,7 @@ export interface UserMetadata {
 export class UserUtils {
   static normalize(supabaseUser: SupabaseUser, dbUser?: DatabaseUser | null): AppUser {
     const metadata = supabaseUser.user_metadata || {};
-    
+
     return {
       // Supabase поля
       id: supabaseUser.id,
@@ -44,21 +44,21 @@ export class UserUtils {
       email_confirmed_at: supabaseUser.email_confirmed_at,
       phone: supabaseUser.phone,
       user_metadata: metadata,
-      
+
       // Database поля (з пріоритетом DB)
       name: dbUser?.name || metadata.name || metadata.full_name || null,
       image: dbUser?.image || metadata.avatar_url || metadata.picture || null,
       last_seen: dbUser?.last_seen || null,
-      
+
       // Обчислювані
-      is_online: this.isUserOnline(dbUser?.last_seen),
-      display_name: this.getDisplayName(supabaseUser, dbUser),
+      is_online: UserUtils.isUserOnline(dbUser?.last_seen),
+      display_name: UserUtils.getDisplayName(supabaseUser, dbUser),
     };
   }
-  
+
   static getDisplayName(supabaseUser: SupabaseUser, dbUser?: DatabaseUser | null): string {
     const metadata = supabaseUser.user_metadata || {};
-    
+
     return (
       metadata.name ||
       metadata.full_name ||
@@ -67,22 +67,17 @@ export class UserUtils {
       'Unknown User'
     );
   }
-  
+
   static getUserImage(supabaseUser: SupabaseUser, dbUser?: DatabaseUser | null): string | null {
     const metadata = supabaseUser.user_metadata || {};
-    
-    return (
-      dbUser?.image ||
-      metadata.avatar_url ||
-      metadata.picture ||
-      null
-    );
+
+    return dbUser?.image || metadata.avatar_url || metadata.picture || null;
   }
-  
+
   static isEmailVerified(supabaseUser: SupabaseUser): boolean {
     return !!supabaseUser.email_confirmed_at;
   }
-  
+
   static isUserOnline(lastSeen?: string | null): boolean {
     if (!lastSeen) return false;
     const lastSeenTime = new Date(lastSeen).getTime();
@@ -90,11 +85,11 @@ export class UserUtils {
     const fiveMinutesAgo = now - 5 * 60 * 1000;
     return lastSeenTime > fiveMinutesAgo;
   }
-  
+
   static getInitials(name: string): string {
     return name
       .split(' ')
-      .map(word => word[0])
+      .map((word) => word[0])
       .join('')
       .toUpperCase()
       .slice(0, 2);
@@ -111,7 +106,10 @@ export function isAppUser(user: unknown): user is AppUser {
 /**
  * Hook для отримання нормалізованого користувача
  */
-export function useNormalizedUser(supabaseUser: SupabaseUser | null, dbUser?: DatabaseUser | null): AppUser | null {
+export function useNormalizedUser(
+  supabaseUser: SupabaseUser | null,
+  dbUser?: DatabaseUser | null,
+): AppUser | null {
   if (!supabaseUser) return null;
   return UserUtils.normalize(supabaseUser, dbUser);
 }

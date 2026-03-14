@@ -1,9 +1,11 @@
 'use client';
 
-import { useQueryClient, type InfiniteData } from '@tanstack/react-query';
+import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import type { VirtuosoHandle } from 'react-virtuoso';
 import { toast } from 'sonner';
+import { handleError } from '@/shared/lib/error-handler';
+import { NotFoundError } from '@/shared/lib/errors';
 import type { Message } from '@/types';
 
 /**
@@ -77,7 +79,15 @@ export function useScrollToMessage(
     if (tryScroll(messages)) return;
 
     if (!hasPreviousPage) {
-      toast.error('Повідомлення не знайдено в історії');
+      handleError(
+        new NotFoundError(
+          'Повідомлення не знайдено в історії',
+          'message',
+          'MESSAGE_NOT_FOUND_IN_HISTORY',
+          404,
+        ),
+        'ScrollToMessage',
+      );
       return;
     }
 
@@ -89,7 +99,10 @@ export function useScrollToMessage(
     const fetchNext = async (depth = 0) => {
       if (depth > 8 || abortControllerRef.current?.signal.aborted) {
         if (!abortControllerRef.current?.signal.aborted) {
-          toast.error('Повідомлення не знайдено');
+          handleError(
+            new NotFoundError('Повідомлення не знайдено', 'message', 'MESSAGE_NOT_FOUND', 404),
+            'ScrollToMessage',
+          );
           setPendingScrollTarget(null);
         }
         setIsFetchingHistory(false);
@@ -99,7 +112,9 @@ export function useScrollToMessage(
       await fetchPreviousPage();
       await new Promise((r) => setTimeout(r, 200));
 
-      const freshData = queryClient.getQueryData(['messages', chatId]) as InfiniteData<Message> | undefined;
+      const freshData = queryClient.getQueryData(['messages', chatId]) as
+        | InfiniteData<Message>
+        | undefined;
       const freshMessages = freshData?.pages?.flat() || [];
 
       if (tryScroll(freshMessages)) {

@@ -2,8 +2,10 @@
 
 import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { messagesApi } from '@/api';
+import { useSupabaseAuth } from '@/components/auth/AuthProvider';
+import { handleError } from '@/shared/lib/error-handler';
+import { AuthError } from '@/shared/lib/errors';
 import type { Attachment, Message } from '@/types';
 
 /**
@@ -23,7 +25,7 @@ export function useSendMessage(chatId: string) {
       reply_to_id?: string;
       attachments?: Attachment[];
     }) => {
-      if (!user) throw new Error('Ви не авторизовані');
+      if (!user) throw new AuthError('Ви не авторизовані', 'SEND_MESSAGE_AUTH_REQUIRED', 401);
 
       return await messagesApi.sendMessage(chatId, {
         sender_id: user.id,
@@ -66,11 +68,11 @@ export function useSendMessage(chatId: string) {
       return { previousData };
     },
 
-    onError: (error, _, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(['messages', chatId], context.previousData);
-      }
-      toast.error(`Не вдалося відправити: ${error.message}`);
+    onError: (error: Error & { status?: number }) => {
+      handleError(
+        new AuthError(error.message, 'SEND_MESSAGE_ERROR', error.status || 500),
+        'SendMessage',
+      );
     },
 
     onSuccess: (savedMessage) => {

@@ -21,20 +21,20 @@ export const users = pgTable(
     image: text('image'),
     last_seen: timestamp('last_seen', { mode: 'date' }).defaultNow(),
     email_verified: timestamp('emailVerified', { mode: 'date' }),
-    
+
     // Додаткові поля для кращого UX
     is_online: boolean('is_online').default(false),
     status: text('status').default('offline'), // 'online', 'away', 'offline'
     status_message: text('status_message'),
-    
+
     // OAuth дані для кешування
     provider: text('provider'), // 'google', 'github', 'email'
     provider_id: text('provider_id'),
-    
+
     // Налаштування
     preferences: jsonb('preferences').$type<UserPreferences>(),
     theme: text('theme').default('system'), // 'light', 'dark', 'system'
-    
+
     created_at: timestamp('created_at').defaultNow(),
     updated_at: timestamp('updated_at').defaultNow(),
   },

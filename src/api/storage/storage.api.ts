@@ -1,5 +1,7 @@
-import { supabase } from '@/lib/supabase/client';
 import { isPrivateBucket, type StorageConfig, storageConfig } from '@/config/storage.config';
+import { supabase } from '@/lib/supabase/client';
+import { handleError } from '@/shared/lib/error-handler';
+import { NetworkError } from '@/shared/lib/errors';
 import type { Attachment } from '@/types';
 
 interface SignedUrlOptions {
@@ -20,7 +22,14 @@ export const storageApi = {
       });
       return data.publicUrl;
     } catch (err) {
-      throw new Error(`Failed to get public URL for ${bucket}/${path}: ${err}`);
+      const error = new NetworkError(
+        `Failed to get public URL for ${bucket}/${path}: ${err}`,
+        'storage',
+        'PUBLIC_URL_ERROR',
+        500,
+      );
+      handleError(error, 'StorageApi.getPublicUrl');
+      throw error;
     }
   },
 
@@ -37,12 +46,26 @@ export const storageApi = {
         });
 
       if (signedUrlError) {
-        throw new Error(`Failed to create signed URL: ${signedUrlError.message}`);
+        const error = new NetworkError(
+          `Failed to create signed URL: ${signedUrlError.message}`,
+          'storage',
+          'SIGNED_URL_ERROR',
+          signedUrlError.status || 500,
+        );
+        handleError(error, 'StorageApi.getSignedUrl');
+        throw error;
       }
 
       return data.signedUrl;
     } catch (err) {
-      throw new Error(`Failed to get signed URL for ${bucket}/${path}: ${err}`);
+      const error = new NetworkError(
+        `Failed to get signed URL for ${bucket}/${path}: ${err}`,
+        'storage',
+        'SIGNED_URL_ERROR',
+        500,
+      );
+      handleError(error, 'StorageApi.getSignedUrl');
+      throw error;
     }
   },
 
@@ -60,7 +83,14 @@ export const storageApi = {
           });
 
         if (error) {
-          throw new Error(`Failed to create signed URL: ${error.message}`);
+          const networkError = new NetworkError(
+            `Failed to create signed URL: ${error.message}`,
+            'storage',
+            'SIGNED_URL_ERROR',
+            error.status || 500,
+          );
+          handleError(networkError, 'StorageApi.getUrl');
+          throw networkError;
         }
 
         return data.signedUrl;
@@ -73,17 +103,29 @@ export const storageApi = {
         return data.publicUrl;
       }
     } catch (err) {
-      throw new Error(`Failed to get URL for ${bucket}/${path}: ${err}`);
+      const error = new NetworkError(
+        `Failed to get URL for ${bucket}/${path}: ${err}`,
+        'storage',
+        'GET_URL_ERROR',
+        500,
+      );
+      handleError(error, 'StorageApi.getUrl');
+      throw error;
     }
   },
 
   /**
    * Завантаження файлу
    */
-  uploadFile: async (bucket: string, path: string, file: File, options?: {
-    cacheControl?: string;
-    upsert?: boolean;
-  }) => {
+  uploadFile: async (
+    bucket: string,
+    path: string,
+    file: File,
+    options?: {
+      cacheControl?: string;
+      upsert?: boolean;
+    },
+  ) => {
     const { error } = await supabase.storage.from(bucket).upload(path, file, {
       cacheControl: options?.cacheControl || '3600',
       upsert: options?.upsert || false,
@@ -112,8 +154,11 @@ export const storageApi = {
     const attachment: Attachment = {
       id: `temp-${Date.now()}`,
       url: publicUrl,
-      type: file.type.startsWith('image/') ? 'image' : 
-            file.type.startsWith('video/') ? 'video' : 'file',
+      type: file.type.startsWith('image/')
+        ? 'image'
+        : file.type.startsWith('video/')
+          ? 'video'
+          : 'file',
       is_deleted: false,
       metadata: {
         name: file.name,
@@ -128,10 +173,7 @@ export const storageApi = {
    * Отримання динамічної конфігурації storage
    */
   getStorageConfig: async (): Promise<StorageConfig> => {
-    const { data, error } = await supabase
-      .from('storage_configs')
-      .select('*')
-      .single();
+    const { data, error } = await supabase.from('storage_configs').select('*').single();
 
     if (error && error.code !== 'PGRST116') {
       throw error;

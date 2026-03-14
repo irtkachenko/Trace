@@ -1,10 +1,10 @@
 'use client';
 
-import type { User, RealtimeChannel } from '@supabase/supabase-js';
+import type { RealtimeChannel, User } from '@supabase/supabase-js';
+import { useEffect, useRef } from 'react';
 import { create } from 'zustand';
 import { queryClient } from '@/lib/query-client';
 import { supabase } from '@/lib/supabase/client';
-import { useRef, useEffect } from 'react';
 
 interface PresenceState {
   onlineUsers: Set<string>;
@@ -136,15 +136,21 @@ function setupChannel(
             stopHeartbeat(manager);
 
             // Attempt reconnection if we haven't exceeded max attempts
-            if (manager.reconnectAttempts < manager.maxReconnectAttempts && manager.subscribers > 0) {
+            if (
+              manager.reconnectAttempts < manager.maxReconnectAttempts &&
+              manager.subscribers > 0
+            ) {
               manager.reconnectAttempts++;
               setConnectionState('RECONNECTING');
+
+              // Exponential backoff: 2s, 4s, 8s, 16s, 32s...
+              const delay = RECONNECT_DELAY * 2 ** (manager.reconnectAttempts - 1);
 
               setTimeout(() => {
                 if (manager.channel && manager.subscribers > 0) {
                   setupChannel(manager, userId, setOnlineUsers, setConnectionState);
                 }
-              }, RECONNECT_DELAY * manager.reconnectAttempts);
+              }, delay);
             }
             break;
         }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { isPrivateBucket, type StorageConfig, storageConfig } from '@/config/storage.config';
 import { storageApi } from '@/api';
+import { isPrivateBucket, type StorageConfig, storageConfig } from '@/config/storage.config';
+import { AuthError, NetworkError } from '@/shared/lib/errors';
 
 interface SignedUrlOptions {
   expiresIn?: number; // Default: from config
@@ -53,7 +54,12 @@ export function useStorageUrl(): UseStorageUrlReturn {
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       setError(error);
-      throw error;
+      throw new NetworkError(
+        `Failed to get storage URL for ${bucket}/${path}`,
+        `${bucket}/${path}`,
+        'STORAGE_URL_ERROR',
+        500,
+      );
     } finally {
       setIsLoading(false);
     }
