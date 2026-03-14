@@ -4,6 +4,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { chatsApi } from '@/api';
+import { handleError } from '@/shared/lib/error-handler';
+import { NetworkError } from '@/shared/lib/errors';
 import type { FullChat } from '@/types';
 
 /**
@@ -29,8 +31,11 @@ export function useDeleteChat() {
       toast.success('Чат видалено');
       router.push('/chat');
     },
-    onError: (error: Error) => {
-      toast.error(`Не вдалося видалити чат: ${error.message}`);
+    onError: (error: Error & { status?: number }) => {
+      handleError(
+        new NetworkError(error.message, 'deleteChat', 'DELETE_CHAT_ERROR', error.status || 500),
+        'DeleteChat',
+      );
     },
   });
 }

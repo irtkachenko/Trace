@@ -6,6 +6,8 @@ import { useLayoutEffect, useRef } from 'react';
 import { Toaster, toast } from 'sonner';
 import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
 import { queryClient } from '@/lib/query-client';
+import { handleError } from '@/shared/lib/error-handler';
+import { AppError } from '@/shared/lib/errors';
 
 /**
  * Внутрішній компонент-запобіжник.
@@ -33,20 +35,14 @@ function RenderGuard({ children }: { children: React.ReactNode }) {
 
     // Якщо рендерів занадто багато (більше 30 за 5 сек) — це "петля"
     if (renderCount.current > 30) {
-      console.error('⛔ [RenderGuard] Detected an infinite loop.');
-
-      toast.error('Критична помилка клієнта', {
-        description: 'Виявлено вічний цикл. Повертаємось на головну...',
-        duration: 5000,
-      });
-
-      // Робимо жорсткий редірект, щоб розірвати цикл
-      const timeoutId = setTimeout(() => {
-        window.location.replace('/');
-      }, 1500);
-
-      // Очищення таймауту при анмаунті
-      return () => clearTimeout(timeoutId);
+      const error = new AppError(
+        'Критична помилка клієнта - детектовано нескінченний рендеринг',
+        'INFINITE_RENDER_LOOP',
+        500,
+        false,
+      );
+      handleError(error, 'RenderGuard');
+      return;
     }
   }); // Run on every render to detect infinite loops
 

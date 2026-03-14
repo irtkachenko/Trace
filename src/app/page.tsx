@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { handleError } from '@/shared/lib/error-handler';
+import { AuthError } from '@/shared/lib/errors';
 
 export default async function Home() {
   const supabase = await createClient();
@@ -29,7 +31,7 @@ export default async function Home() {
           });
 
           if (error) {
-            console.error('Sign in error:', error);
+            handleError(new AuthError(error.message, 'SIGN_IN_ERROR', error.status), 'Page.signIn');
             return;
           }
 

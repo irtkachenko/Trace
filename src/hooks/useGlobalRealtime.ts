@@ -1,12 +1,13 @@
 'use client';
 
-import type { User } from '@supabase/supabase-js';
+import type { RealtimeChannel, User } from '@supabase/supabase-js';
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
 import { realtimeApi } from '@/api';
+import { handleError } from '@/shared/lib/error-handler';
+import { NetworkError, ValidationError } from '@/shared/lib/errors';
 import { usePresenceStore, usePresenceSubscription } from '@/store/usePresenceStore';
 import type { FullChat, Message } from '@/types';
-import type { RealtimeChannel } from '@supabase/supabase-js';
 
 interface RealtimePayload<T = Record<string, unknown>> {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE';
@@ -21,24 +22,51 @@ function validatePayload<T>(
   requiredFields: (keyof T)[],
 ): payload is RealtimePayload<T> {
   if (!payload || typeof payload !== 'object') {
-    console.error('Invalid payload structure:', payload);
+    handleError(
+      new ValidationError('Invalid payload structure', 'payload', 'INVALID_PAYLOAD_STRUCTURE', 400),
+      'GlobalRealtime',
+    );
     return false;
   }
 
   if (payload.errors && payload.errors.length > 0) {
-    console.error('Payload contains errors:', payload.errors);
+    handleError(
+      new ValidationError(
+        `Payload contains errors: ${payload.errors.join(', ')}`,
+        'payload',
+        'PAYLOAD_ERRORS',
+        400,
+      ),
+      'GlobalRealtime',
+    );
     return false;
   }
 
   if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
     if (!payload.new || typeof payload.new !== 'object') {
-      console.error('Invalid payload.new for event type:', payload.eventType);
+      handleError(
+        new ValidationError(
+          `Invalid payload.new for event type: ${payload.eventType}`,
+          'payload.new',
+          'INVALID_PAYLOAD_NEW',
+          400,
+        ),
+        'GlobalRealtime',
+      );
       return false;
     }
 
     for (const field of requiredFields) {
       if (!(field in payload.new)) {
-        console.error(`Missing required field '${String(field)}' in payload.new`);
+        handleError(
+          new ValidationError(
+            `Missing required field '${String(field)}' in payload.new`,
+            'payload.new',
+            `MISSING_FIELD_${String(field).toUpperCase()}`,
+            400,
+          ),
+          'GlobalRealtime',
+        );
         return false;
       }
     }
@@ -46,7 +74,15 @@ function validatePayload<T>(
 
   if (payload.eventType === 'DELETE') {
     if (!payload.old || typeof payload.old !== 'object') {
-      console.error('Invalid payload.old for DELETE event');
+      handleError(
+        new ValidationError(
+          'Invalid payload.old for DELETE',
+          'payload.old',
+          'INVALID_PAYLOAD_OLD',
+          400,
+        ),
+        'GlobalRealtime',
+      );
       return false;
     }
   }
@@ -82,7 +118,7 @@ function getActiveChatId(queryClient: ReturnType<typeof useQueryClient>): string
   // Try to get chat ID from current URL pathname
   if (typeof window !== 'undefined') {
     const pathname = window.location.pathname;
-    const chatMatch = pathname.match(/^\/chat\/([^\/]+)$/);
+    const chatMatch = pathname.match(/^\/chat\/([^/]+)$/);
     if (chatMatch && chatMatch[1]) {
       return chatMatch[1];
     }
@@ -126,7 +162,10 @@ interface ChatPayload {
 }
 
 // Throttle utility for typing events
-function createThrottle(func: (isTyping: boolean) => void, delay: number): (isTyping: boolean) => void {
+function createThrottle(
+  func: (isTyping: boolean) => void,
+  delay: number,
+): (isTyping: boolean) => void {
   let timeoutId: NodeJS.Timeout | null = null;
   let lastExecTime = 0;
 
@@ -183,7 +222,15 @@ export function useChatRealtime(chatId: string | null, user: User | null) {
       try {
         realtimeApi.unsubscribe(channelRef.current);
       } catch (error) {
-        console.error('Error removing realtime channel:', error);
+        handleError(
+          new NetworkError(
+            'Error removing realtime channel',
+            'channel',
+            'REALTIME_CHANNEL_ERROR',
+            500,
+          ),
+          'GlobalRealtime',
+        );
       } finally {
         channelRef.current = null;
       }
@@ -201,8 +248,7 @@ export function useChatRealtime(chatId: string | null, user: User | null) {
   const handleMessageInsert = (payload: RealtimePayload<MessagePayload>) => {
     // Validate payload structure
     if (!validatePayload(payload, ['id', 'chat_id', 'sender_id', 'content', 'created_at'])) {
-      console.error('Invalid message payload received:', payload);
-      return;
+      return; // handleError вже викликаний в validatePayload
     }
 
     const newMessage = payload.new;
@@ -331,8 +377,7 @@ export function useChatRealtime(chatId: string | null, user: User | null) {
   const handleMessageUpdate = (payload: RealtimePayload<MessagePayload>) => {
     // Validate payload structure
     if (!validatePayload(payload, ['id', 'chat_id', 'sender_id'])) {
-      console.error('Invalid message update payload received:', payload);
-      return;
+      return; // handleError вже викликаний в validatePayload
     }
 
     const updatedMessage = payload.new;
@@ -375,8 +420,7 @@ export function useChatRealtime(chatId: string | null, user: User | null) {
   const handleMessageDelete = (payload: RealtimePayload<MessagePayload>) => {
     // Validate payload structure
     if (!validatePayload(payload, [])) {
-      console.error('Invalid message delete payload received:', payload);
-      return;
+      return; // handleError вже викликаний в validatePayload
     }
 
     const deletedId = payload.old?.id;

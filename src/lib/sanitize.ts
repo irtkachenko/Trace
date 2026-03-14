@@ -50,3 +50,20 @@ export function sanitizeSearchQuery(input: string, maxLength = 100): string {
   const trimmed = input.trim().slice(0, maxLength);
   return escapeIlike(trimmed);
 }
+
+/**
+ * Валідує URL для безпечного відображення в Linkify
+ * Дозволяє тільки http/https протоколи для захисту від XSS
+ *
+ * @param url — URL для валідації
+ * @returns — true якщо URL безпечний, false в іншому випадку
+ *
+ * @example
+ * ```ts
+ * isValidUrlForLinkify("https://example.com") // true
+ * isValidUrlForLinkify("javascript:alert('XSS')") // false
+ * ```
+ */
+export function isValidUrlForLinkify(url: string): boolean {
+  return /^https?:\/\//.test(url);
+}

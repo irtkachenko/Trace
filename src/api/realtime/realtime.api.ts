@@ -1,5 +1,5 @@
-import { supabase } from '@/lib/supabase/client';
 import type { RealtimeChannel, RealtimeChannelSendResponse } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase/client';
 
 export const realtimeApi = {
   /**
@@ -13,14 +13,15 @@ export const realtimeApi = {
    * Підписка на повідомлення чату
    */
   subscribeToMessages: (channel: RealtimeChannel, callback: (payload: any) => void) => {
-    return channel.on('postgres_changes', 
-      { 
-        event: '*', 
-        schema: 'public', 
-        table: 'messages', 
-        filter: `chat_id=eq.${channel.topic?.split(':')[1]}`
-      }, 
-      callback
+    return channel.on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'messages',
+        filter: `chat_id=eq.${channel.topic?.split(':')[1]}`,
+      },
+      callback,
     );
   },
 
@@ -35,7 +36,8 @@ export const realtimeApi = {
    * Підписка на статус присутності
    */
   subscribeToPresence: (channel: RealtimeChannel, callback: (payload: any) => void) => {
-    return channel.on('presence', { event: 'sync' }, callback)
+    return channel
+      .on('presence', { event: 'sync' }, callback)
       .on('presence', { event: 'join' }, callback)
       .on('presence', { event: 'leave' }, callback);
   },
@@ -44,13 +46,14 @@ export const realtimeApi = {
    * Підписка на зміни в чатах
    */
   subscribeToChats: (channel: RealtimeChannel, callback: (payload: any) => void) => {
-    return channel.on('postgres_changes', 
-      { 
-        event: '*', 
-        schema: 'public', 
-        table: 'chats' 
-      }, 
-      callback
+    return channel.on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'chats',
+      },
+      callback,
     );
   },
 
@@ -58,21 +61,26 @@ export const realtimeApi = {
    * Підписка на зміни в користувачах
    */
   subscribeToUsers: (channel: RealtimeChannel, callback: (payload: any) => void) => {
-    return channel.on('postgres_changes', 
-      { 
-        event: 'UPDATE', 
-        schema: 'public', 
+    return channel.on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
         table: 'users',
-        filter: 'id=eq.current_user' 
-      }, 
-      callback
+        filter: 'id=eq.current_user',
+      },
+      callback,
     );
   },
 
   /**
    * Відправка broadcast повідомлення
    */
-  broadcast: (channel: RealtimeChannel, event: string, payload: any): RealtimeChannelSendResponse => {
+  broadcast: (
+    channel: RealtimeChannel,
+    event: string,
+    payload: any,
+  ): RealtimeChannelSendResponse => {
     return channel.send({
       type: 'broadcast',
       event,

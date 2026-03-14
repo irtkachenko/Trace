@@ -1,5 +1,5 @@
-import type { Database } from './supabase';
 import type { AppUser } from './auth';
+import type { Database } from './supabase';
 
 // Define Attachment interface inline to avoid circular import
 export interface Attachment {
@@ -18,7 +18,7 @@ export interface Attachment {
 
 // Експортуємо AppUser як User для сумісності
 export type User = AppUser;
-export { AppUser };
+export type { AppUser };
 export type Chat = Database['public']['Tables']['chats']['Row'];
 export type Message = Database['public']['Tables']['messages']['Row'] & {
   // Override attachments to be properly typed

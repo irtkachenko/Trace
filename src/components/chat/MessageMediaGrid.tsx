@@ -2,12 +2,15 @@
 
 import { FileX, ImageOff, PlayCircle } from 'lucide-react';
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { isMediaType, storageConfig } from '@/config/storage.config';
 import { useStorageUrl } from '@/hooks/useStorageUrl';
 import { cn } from '@/lib/utils';
+import { handleError } from '@/shared/lib/error-handler';
+import { NetworkError } from '@/shared/lib/errors';
 import type { Attachment } from '@/types';
-import ImageModal from './ImageModal';
+
+const ImageModal = lazy(() => import('./ImageModal'));
 
 interface MessageMediaGridProps {
   items: Attachment[];
@@ -64,7 +67,15 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
             // If not a Supabase storage URL, use as-is
             return { ...item, processedUrl: item.url };
           } catch (error) {
-            console.error('Failed to process attachment URL:', error);
+            handleError(
+              new NetworkError(
+                'Failed to process attachment URL',
+                'attachment',
+                'ATTACHMENT_URL_PROCESS_ERROR',
+                500,
+              ),
+              'MessageMediaGrid',
+            );
             // Fallback to original URL
             return { ...item, processedUrl: item.url };
           }
@@ -215,12 +226,14 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
         {count >= 4 && processedItems.slice(0, 4).map((item, i) => renderItem(item, i))}
       </div>
 
-      <ImageModal
-        isOpen={selectedIndex !== null}
-        images={modalImages}
-        initialIndex={selectedIndex ?? 0}
-        onClose={() => setSelectedIndex(null)}
-      />
+      <Suspense fallback={<div className="hidden" />}>
+        <ImageModal
+          isOpen={selectedIndex !== null}
+          images={modalImages}
+          initialIndex={selectedIndex ?? 0}
+          onClose={() => setSelectedIndex(null)}
+        />
+      </Suspense>
     </>
   );
 }

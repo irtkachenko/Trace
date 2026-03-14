@@ -1,8 +1,8 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { contactsApi } from '@/api';
+import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import type { User } from '@/types';
 
 /**

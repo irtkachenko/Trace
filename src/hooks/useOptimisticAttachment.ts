@@ -2,14 +2,15 @@
 
 import imageCompression from 'browser-image-compression';
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { storageApi } from '@/api';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import {
   getFileTypeCategory,
   isAllowedFileExtension,
   storageConfig,
 } from '@/config/storage.config';
-import { storageApi } from '@/api';
+import { handleError } from '@/shared/lib/error-handler';
+import { AuthError, NetworkError, ValidationError } from '@/shared/lib/errors';
 import type { Attachment } from '@/types';
 import { useStorageLimits } from './useDynamicStorageConfig';
 
@@ -37,14 +38,25 @@ export function useOptimisticAttachment(chatId: string) {
 
   const uploadFile = async (file: File): Promise<Attachment | null> => {
     if (!user) {
-      toast.error('Ви не авторизовані');
+      handleError(
+        new AuthError('Ви не авторизовані', 'UPLOAD_AUTH_REQUIRED', 401),
+        'OptimisticAttachment',
+      );
       return null;
     }
 
     // Use dynamic validation instead of hardcoded checks
     const validation = validateFile(file);
     if (!validation.valid) {
-      toast.error(validation.error);
+      handleError(
+        new ValidationError(
+          validation.error || 'Помилка валідації файлу',
+          'file',
+          'FILE_VALIDATION_ERROR',
+          400,
+        ),
+        'OptimisticAttachment',
+      );
       return null;
     }
 
@@ -120,7 +132,11 @@ export function useOptimisticAttachment(chatId: string) {
       return finalAttachment;
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Помилка завантаження';
-      toast.error(errorMessage);
+      const error =
+        err instanceof ValidationError
+          ? err
+          : new NetworkError(errorMessage, 'file-upload', 'ATTACHMENT_UPLOAD_ERROR', 500);
+      handleError(error, 'OptimisticAttachment');
 
       setAttachments((prev) =>
         prev.map((a) => (a.id === id ? { ...a, uploading: false, error: errorMessage } : a)),

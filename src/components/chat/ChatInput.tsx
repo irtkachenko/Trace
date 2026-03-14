@@ -7,6 +7,8 @@ import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { useEditMessage, useSendMessage } from '@/hooks/chat';
 import { useOptimisticAttachment } from '@/hooks/useOptimisticAttachment';
 import { cn } from '@/lib/utils';
+import { handleError } from '@/shared/lib/error-handler';
+import { NetworkError } from '@/shared/lib/errors';
 import type { Message } from '@/types';
 import ComposerAddons from './ComposerAddons';
 
@@ -120,7 +122,10 @@ export default function ChatInput({
       if (onMessageSent) onMessageSent();
     } catch (error) {
       // Якщо впало — повертаємо текст назад, щоб юзер не втратив повідомлення
-      console.error('Failed to process:', error);
+      handleError(
+        new NetworkError('Failed to process message', 'message', 'MESSAGE_PROCESS_ERROR', 500),
+        'ChatInput',
+      );
       setContent(trimmed);
     }
   };

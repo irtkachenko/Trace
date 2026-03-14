@@ -1,5 +1,7 @@
-import { supabase } from '@/lib/supabase/client';
 import { sanitizeSearchQuery } from '@/lib/sanitize';
+import { supabase } from '@/lib/supabase/client';
+import { handleError } from '@/shared/lib/error-handler';
+import { NetworkError } from '@/shared/lib/errors';
 import type { User } from '@/types';
 
 export const contactsApi = {
@@ -24,8 +26,14 @@ export const contactsApi = {
     const { data, error } = await query;
 
     if (error) {
-      console.error('Помилка пошуку користувачів:', error.message);
-      throw error;
+      const networkError = new NetworkError(
+        error.message,
+        'contacts',
+        'CONTACTS_SEARCH_ERROR',
+        error.status || 500,
+      );
+      handleError(networkError, 'ContactsApi.searchUsers');
+      throw networkError;
     }
 
     return data as User[];

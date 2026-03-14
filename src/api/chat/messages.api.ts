@@ -1,5 +1,7 @@
 import { supabase } from '@/lib/supabase/client';
-import type { Message, Attachment } from '@/types';
+import { handleError } from '@/shared/lib/error-handler';
+import { NetworkError } from '@/shared/lib/errors';
+import type { Attachment, Message } from '@/types';
 
 export const messagesApi = {
   /**
@@ -15,8 +17,14 @@ export const messagesApi = {
       .lt('created_at', cursor || '9999-12-31');
 
     if (error) {
-      console.error('Помилка завантаження повідомлень:', error.message);
-      throw error;
+      const networkError = new NetworkError(
+        error.message,
+        'messages',
+        'MESSAGES_LOAD_ERROR',
+        error.status || 500,
+      );
+      handleError(networkError, 'MessagesApi.getMessages');
+      throw networkError;
     }
 
     const normalizedData = (data as unknown as Message[]).map((msg) => ({
@@ -31,12 +39,15 @@ export const messagesApi = {
   /**
    * Відправка повідомлення
    */
-  sendMessage: async (chatId: string, payload: {
-    sender_id: string;
-    content: string;
-    reply_to_id?: string;
-    attachments?: Attachment[];
-  }) => {
+  sendMessage: async (
+    chatId: string,
+    payload: {
+      sender_id: string;
+      content: string;
+      reply_to_id?: string;
+      attachments?: Attachment[];
+    },
+  ) => {
     const { error, data } = await supabase
       .from('messages')
       .insert({
@@ -50,8 +61,14 @@ export const messagesApi = {
       .single();
 
     if (error) {
-      console.error('Помилка відправки:', error.message);
-      throw error;
+      const networkError = new NetworkError(
+        error.message,
+        'messages',
+        'MESSAGE_SEND_ERROR',
+        error.status || 500,
+      );
+      handleError(networkError, 'MessagesApi.sendMessage');
+      throw networkError;
     }
     return data as Message;
   },
@@ -90,13 +107,11 @@ export const messagesApi = {
    * Позначення повідомлення як прочитаного
    */
   markAsRead: async (chatId: string, messageId: string, userId: string) => {
-    const { error } = await supabase
-      .from('message_reads')
-      .insert({
-        chat_id: chatId,
-        message_id: messageId,
-        user_id: userId,
-      });
+    const { error } = await supabase.from('message_reads').insert({
+      chat_id: chatId,
+      message_id: messageId,
+      user_id: userId,
+    });
 
     if (error) throw error;
   },
