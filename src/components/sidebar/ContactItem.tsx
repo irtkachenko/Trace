@@ -51,8 +51,8 @@ function ContactItemBase({ user, disabled, onActionStart, onActionEnd }: Contact
               src={user.image}
               alt={user.name || 'User'}
               fill
-              className="object-cover"
               sizes="40px"
+              className="object-cover"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">

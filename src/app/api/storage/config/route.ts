@@ -6,7 +6,7 @@ export async function GET() {
   try {
     const supabase = await createClient();
     const { data: bucket, error } = await supabase.storage.getBucket(
-      storageConfig.buckets.attachments.name,
+      storageConfig.bucketNames.attachments,
     );
 
     // If bucket not found or error, return defaults from static config
@@ -14,15 +14,15 @@ export async function GET() {
       return NextResponse.json({
         buckets: [
           {
-            name: storageConfig.buckets.attachments.name,
-            public: !storageConfig.buckets.attachments.isPrivate,
+            name: storageConfig.bucketNames.attachments,
+            public: false, // attachments bucket is private by default
             createdAt: new Date().toISOString(),
           },
         ],
         limits: {
-          maxFileSize: String(storageConfig.buckets.attachments.maxFileSize),
-          allowedTypes: storageConfig.buckets.attachments.allowedExtensions.map((ext) => `.${ext}`),
-          signedUrlExpiry: storageConfig.defaultSignedUrlExpiry,
+          maxFileSize: String(storageConfig.defaults.maxFileSize),
+          allowedTypes: storageConfig.staticAssetExtensions.map((ext: string) => `.${ext}`),
+          signedUrlExpiry: storageConfig.defaults.signedUrlExpiry,
         },
       });
     }
@@ -37,13 +37,13 @@ export async function GET() {
       ],
       limits: {
         maxFileSize: String(
-          bucket.file_size_limit ?? storageConfig.buckets.attachments.maxFileSize,
+          bucket.file_size_limit ?? storageConfig.defaults.maxFileSize,
         ),
         allowedTypes:
           Array.isArray(bucket.allowed_mime_types) && bucket.allowed_mime_types.length > 0
             ? bucket.allowed_mime_types
-            : storageConfig.buckets.attachments.allowedExtensions.map((ext) => `.${ext}`),
-        signedUrlExpiry: storageConfig.defaultSignedUrlExpiry,
+            : storageConfig.staticAssetExtensions.map((ext: string) => `.${ext}`),
+        signedUrlExpiry: storageConfig.defaults.signedUrlExpiry,
       },
     };
 

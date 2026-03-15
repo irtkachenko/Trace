@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { storageApi } from '@/services';
+import { getMaxFilesPerMessage } from '@/config/upload.config';
 import { handleError } from '@/shared/lib/error-handler';
 import { AuthError, NetworkError, ValidationError } from '@/shared/lib/errors';
 import type { Attachment } from '@/types';
@@ -67,12 +68,13 @@ export function useLocalFileSelection() {
 
     const fileArray = Array.from(files);
 
-    // Check total file count limit (max 5 files)
+    // Check total file count limit
     const currentFileCount = selectedFiles.length;
-    if (currentFileCount + fileArray.length > 5) {
+    const maxFiles = getMaxFilesPerMessage();
+    if (currentFileCount + fileArray.length > maxFiles) {
       handleError(
         new ValidationError(
-          'Cannot select more than 5 files',
+          `Cannot select more than ${maxFiles} files`,
           'fileCount',
           'FILE_COUNT_LIMIT',
           400,

@@ -1,20 +1,24 @@
 'use client';
 
-import { type InfiniteData, useInfiniteQuery } from '@tanstack/react-query';
+import { type InfiniteData, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
+import { VirtuosoHandle } from 'react-virtuoso';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { messagesApi } from '@/services';
 import type { Message } from '@/types';
 import { useMarkAsRead } from './useMarkAsRead';
-import { monitorAPICall } from '@/lib/performance';
+import { useViewportDetection } from '@/hooks/ui/useViewportDetection';
+import { useScrollPosition } from '@/hooks/ui/useScrollPosition';
+import { useMessageViewTimer } from '@/hooks/ui/useMessageViewTimer';
+import { useChatState } from '@/hooks/ui/useChatState';
 
 /**
  * Hook for fetching and managing chat messages with infinite scroll and auto-read logic.
  */
-export function useMessages(chatId: string) {
+export function useMessages(chatId: string, virtuosoRef: React.RefObject<VirtuosoHandle | null>) {
   const { user } = useSupabaseAuth();
   const { mutate: markAsRead } = useMarkAsRead();
-  const lastProcessedId = useRef<string | null>(null);
+  const queryClient = useQueryClient();
 
   const query = useInfiniteQuery<
     Message[],
@@ -27,9 +31,7 @@ export function useMessages(chatId: string) {
     queryFn: async ({ pageParam }: { pageParam?: string }) => {
       if (!chatId) return [];
 
-      return await monitorAPICall('getMessages')(() => 
-        messagesApi.getMessages(chatId, pageParam)
-      );
+      return await messagesApi.getMessages(chatId, pageParam);
     },
     initialPageParam: undefined,
     getPreviousPageParam: (firstPage): string | undefined => {
@@ -68,18 +70,51 @@ export function useMessages(chatId: string) {
     return Array.from(seen.values());
   }, [allMessages]);
 
-  // Auto-mark incoming messages as read
+  // Initialize new read detection hooks
+  const { visibleMessages, isMessageVisible } = useViewportDetection();
+  const { isAtBottom } = useScrollPosition(virtuosoRef);
+  const { startViewing, stopViewing, isViewedLongEnough } = useMessageViewTimer();
+  const { isChatOpen, isWindowFocused, isDocumentVisible } = useChatState();
+
+  // Advanced auto-read logic with full criteria checking
   useEffect(() => {
-    if (allMessages.length === 0 || !user?.id) return;
+    if (validMessages.length === 0 || !user?.id) return;
 
-    // Find the latest message NOT sent by current user
-    const latestIncomingMessage = allMessages.findLast((m) => m.sender_id !== user.id);
+    // Find unread incoming messages
+    const unreadMessages = validMessages.filter(
+      (m) => m.sender_id !== user.id && !isMessageVisible(m.id)
+    );
 
-    if (latestIncomingMessage && lastProcessedId.current !== latestIncomingMessage.id) {
-      lastProcessedId.current = latestIncomingMessage.id;
-      markAsRead({ chatId, messageId: latestIncomingMessage.id });
-    }
-  }, [allMessages, user?.id, chatId, markAsRead]);
+    if (unreadMessages.length === 0) return;
+
+    // Check all read criteria for each unread message
+    unreadMessages.forEach(message => {
+      // Full criteria check
+      const meetsAllCriteria = 
+        isChatOpen &&                    // Chat is open
+        isWindowFocused &&               // Window is focused
+        isDocumentVisible &&             // Document is visible
+        isAtBottom &&                  // User is at bottom of chat
+        isMessageVisible(message.id) &&   // Message is in viewport
+        isViewedLongEnough(message.id, 500); // Viewed for at least 500ms
+
+      if (meetsAllCriteria) {
+        // Start timing the view
+        startViewing(message.id);
+
+        // Mark as read after minimum view time
+        const timer = setTimeout(() => {
+          markAsRead({ chatId, messageId: message.id });
+          stopViewing(message.id);
+        }, 500);
+
+        return () => {
+          clearTimeout(timer);
+          stopViewing(message.id);
+        };
+      }
+    });
+  }, [validMessages, user?.id, chatId, markAsRead, visibleMessages, isAtBottom, isWindowFocused, isDocumentVisible, isMessageVisible, isViewedLongEnough, startViewing, stopViewing]);
 
   return { ...query, messages: validMessages };
 }

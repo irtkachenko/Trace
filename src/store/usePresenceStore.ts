@@ -5,6 +5,13 @@ import { useCallback, useEffect, useRef } from 'react';
 import { create } from 'zustand';
 import { queryClient } from '@/lib/query-client';
 import { supabase } from '@/lib/supabase/client';
+import { 
+  getMaxReconnectAttempts, 
+  getReconnectDelay, 
+  getHeartbeatInterval, 
+  getPresenceDebounceDelay, 
+  getInactivityTimeout 
+} from '@/config/presence.config';
 
 interface PresenceState {
   onlineUsers: Set<string>;
@@ -22,12 +29,15 @@ interface PresenceManager {
   maxReconnectAttempts: number;
   debounceTimer: NodeJS.Timeout | null;
   pendingUsers: Set<string>;
+  lastActivity: number;
+  cleanupTimeout: NodeJS.Timeout | null;
 }
 
-const MAX_RECONNECT_ATTEMPTS = 5;
-const RECONNECT_DELAY = 2000; // 2 seconds
-const HEARTBEAT_INTERVAL = 1000 * 60 * 5; // 5 minutes
-const PRESENCE_DEBOUNCE_DELAY = 500; // 500ms debounce for presence updates
+const MAX_RECONNECT_ATTEMPTS = getMaxReconnectAttempts();
+const RECONNECT_DELAY = getReconnectDelay();
+const HEARTBEAT_INTERVAL = getHeartbeatInterval();
+const PRESENCE_DEBOUNCE_DELAY = getPresenceDebounceDelay();
+const INACTIVITY_TIMEOUT = getInactivityTimeout();
 
 function createPresenceManager(): PresenceManager {
   return {
@@ -39,6 +49,8 @@ function createPresenceManager(): PresenceManager {
     maxReconnectAttempts: MAX_RECONNECT_ATTEMPTS,
     debounceTimer: null,
     pendingUsers: new Set(),
+    lastActivity: Date.now(),
+    cleanupTimeout: null,
   };
 }
 
@@ -59,12 +71,33 @@ function handleVisibilityChange(): void {
   }
 }
 
+function updateActivity(manager: PresenceManager): void {
+  manager.lastActivity = Date.now();
+  
+  // Clear existing cleanup timeout
+  if (manager.cleanupTimeout) {
+    clearTimeout(manager.cleanupTimeout);
+  }
+  
+  // Set new cleanup timeout
+  manager.cleanupTimeout = setTimeout(() => {
+    // Check if manager is still inactive and has no subscribers
+    if (globalManager && 
+        globalManager.userId === manager.userId &&
+        globalManager.subscribers <= 0 &&
+        Date.now() - globalManager.lastActivity >= INACTIVITY_TIMEOUT) {
+      cleanupPresence();
+    }
+  }, INACTIVITY_TIMEOUT);
+}
+
 function startHeartbeat(manager: PresenceManager): void {
   if (manager.heartbeatInterval) {
     clearInterval(manager.heartbeatInterval);
   }
   manager.heartbeatInterval = setInterval(() => {
     if (manager.channel) {
+      updateActivity(manager);
       manager.channel.track({
         user_id: manager.userId!,
         online_at: new Date().toISOString(),
@@ -100,6 +133,14 @@ function setupChannel(
   setOnlineUsers: (users: Set<string>) => void,
   setConnectionState: (state: 'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING') => void,
 ): void {
+  // Update activity when setting up channel
+  updateActivity(manager);
+
+  // Remove existing channel before creating new one to prevent memory leaks
+  if (manager.channel) {
+    supabase.removeChannel(manager.channel);
+  }
+
   manager.channel = supabase.channel('db-global-updates', {
     config: { presence: { key: userId } },
   });
@@ -185,6 +226,7 @@ function getOrCreateManager(
   setConnectionState: (state: 'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING') => void,
 ): PresenceManager {
   if (globalManager && globalManager.userId === userId) {
+    updateActivity(globalManager);
     return globalManager;
   }
 
@@ -214,6 +256,7 @@ export function usePresenceSubscription() {
 
       const manager = getOrCreateManager(user.id, setOnlineUsers, setConnectionState);
       manager.subscribers++;
+      updateActivity(manager);
     },
     [setOnlineUsers, setConnectionState],
   );
@@ -248,6 +291,12 @@ function cleanupPresence(): void {
   if (manager.debounceTimer) {
     clearTimeout(manager.debounceTimer);
     manager.debounceTimer = null;
+  }
+
+  // Clear cleanup timeout
+  if (manager.cleanupTimeout) {
+    clearTimeout(manager.cleanupTimeout);
+    manager.cleanupTimeout = null;
   }
 
   // Update last seen before disconnecting
