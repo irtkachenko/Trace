@@ -4,8 +4,9 @@ import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { Paperclip, Send } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
-import { useEditMessage, useSendMessage } from '@/hooks/chat';
-import { useOptimisticAttachment } from '@/hooks/useOptimisticAttachment';
+import { useEditMessage } from '@/hooks/chat';
+import { useSendMessageWithFiles } from '@/hooks/chat/useSendMessageWithFiles';
+import { useOptimisticAttachmentLazy } from '@/hooks/useOptimisticAttachmentLazy';
 import { useStorageConfig } from '@/hooks/useStorageConfig';
 import { cn } from '@/lib/utils';
 import { handleError } from '@/shared/lib/error-handler';
@@ -34,12 +35,19 @@ export default function ChatInput({
 }: ChatInputProps) {
   const { user } = useSupabaseAuth(); // Ensure user is available if needed, though useSendMessage handles it
   const [content, setContent] = useState('');
-  const { attachments, uploadFile, removeAttachment, clearAttachments, isUploading } =
-    useOptimisticAttachment(chatId);
+  const {
+    attachments,
+    addFile,
+    addFiles,
+    removeAttachment,
+    clearAttachments,
+    hasAttachments,
+    totalSize,
+  } = useOptimisticAttachmentLazy();
   const { data: storageConfig, isLoading } = useStorageConfig();
 
-  // Використовуємо оновлений хук з Optimistic UI
-  const sendMessage = useSendMessage(chatId);
+  // Використовуємо новий хук для паралельної відправки з файлами
+  const sendMessageWithFiles = useSendMessageWithFiles(chatId);
   const editMessage = useEditMessage(chatId);
 
   // Update content when editingMessage changes
@@ -85,36 +93,33 @@ export default function ChatInput({
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     const trimmed = content.trim();
-    const hasAttachments = attachments.length > 0;
+    const hasFiles = attachments.length > 0;
 
     // Валідація
-    if ((!trimmed && !hasAttachments) || isUploading) return;
+    if (!trimmed && !hasFiles) return;
 
     // 1. Очищуємо UI миттєво (для відчуття швидкості)
     setContent('');
     setTyping(false);
-    // Don't clear reply state yet - wait for successful send
 
-    const attachmentsBackup = attachments
-      .filter((a) => a.url && !a.error && !a.uploading)
-      .map(({ id, type, url, metadata }) => ({ id, type, url, metadata }));
-
+    // Отримуємо файли для відправки
+    const filesToSend = attachments.map((a) => a.file);
     clearAttachments();
 
     try {
       if (editingMessage) {
-        // РЕДАГУВАННЯ
+        // РЕДАГУВАННЯ (файли не підтримуються при редагуванні)
         await editMessage.mutateAsync({
           messageId: editingMessage.id,
           content: trimmed,
         });
         if (onEditCancel) onEditCancel();
       } else {
-        // ВІДПРАВКА НОВОГО
-        await sendMessage.mutateAsync({
+        // ВІДПРАВКА НОВОГО з файлами
+        await sendMessageWithFiles.mutateAsync({
           content: trimmed,
+          files: filesToSend,
           reply_to_id: replyToId || undefined,
-          attachments: attachmentsBackup,
         });
         // Clear reply state only after successful send
         if (onReplyCancel) onReplyCancel();
@@ -142,20 +147,26 @@ export default function ChatInput({
     setTyping(content.length > 0);
   }, [content, setTyping]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files) {
-      Array.from(files).forEach(uploadFile);
+      await addFiles(Array.from(files));
     }
     e.target.value = '';
   };
 
-  const isButtonVisible = content.trim().length > 0 || attachments.length > 0;
+  const isButtonVisible = content.trim().length > 0 || hasAttachments;
 
   return (
     <div className="flex flex-col relative" style={{ willChange: 'transform' }}>
       <ComposerAddons
-        attachments={attachments}
+        attachments={attachments.map(({ file, previewUrl, ...attachment }) => ({
+          ...attachment,
+          file,
+          uploading: false,
+          url: previewUrl,
+          previewUrl,
+        }))}
         onAttachmentRemove={removeAttachment}
         replyTo={replyToMessage}
         onReplyCancel={onReplyCancel}
@@ -203,10 +214,10 @@ export default function ChatInput({
         {isButtonVisible && (
           <button
             type="submit"
-            disabled={isUploading || (!content.trim() && attachments.length === 0)}
+            disabled={sendMessageWithFiles.isPending || (!content.trim() && !hasAttachments)}
             className="p-3 mb-0.5 rounded-full bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 transition-all shadow-lg shadow-blue-600/20 shrink-0"
           >
-            <Send size={20} className={isUploading ? 'animate-pulse' : ''} />
+            <Send size={20} className={sendMessageWithFiles.isPending ? 'animate-pulse' : ''} />
           </button>
         )}
       </form>
