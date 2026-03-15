@@ -3,7 +3,7 @@
 import { FileX, ImageOff, Loader2, PlayCircle } from 'lucide-react';
 import Image from 'next/image';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { isMediaType, storageConfig } from '@/config/storage.config';
+import { storageConfig, getUrlExpiryBuffer, getUrlCheckInterval } from '@/config/storage.config';
 import { useStorageUrl } from '@/hooks/useStorageUrl';
 import { cn } from '@/lib/utils';
 import { handleError } from '@/shared/lib/error-handler';
@@ -18,6 +18,11 @@ interface MessageMediaGridProps {
 
 interface AttachmentWithUrl extends Attachment {
   processedUrl?: string;
+}
+
+interface CachedUrl {
+  url: string;
+  expiresAt: number;
 }
 
 type StorageRef = { bucket: string; path: string };
@@ -38,7 +43,7 @@ function extractStorageRef(rawUrl: string): StorageRef | null {
   }
 
   // Match bucket/path style (e.g., attachments/<path>)
-  const bucketName = storageConfig.buckets.attachments.name;
+  const bucketName = storageConfig.bucketNames.attachments;
   const normalized = url.startsWith('/') ? url.slice(1) : url;
   if (normalized.startsWith(`${bucketName}/`)) {
     return { bucket: bucketName, path: normalized.slice(bucketName.length + 1) };
@@ -65,8 +70,9 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
   const [processedItems, setProcessedItems] = useState<AttachmentWithUrl[]>([]);
   const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
   const { getUrl } = useStorageUrl();
-  const processedCacheRef = useRef<Map<string, string>>(new Map());
+  const processedCacheRef = useRef<Map<string, CachedUrl>>(new Map());
   const failedCacheRef = useRef<Set<string>>(new Set());
+  const expiryCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Process attachment URLs to handle private storage
   useEffect(() => {
@@ -80,8 +86,8 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
         items.map(async (item) => {
           const cacheKey = `${item.id}:${item.url}`;
           const cached = processedCacheRef.current.get(cacheKey);
-          if (cached) {
-            return { ...item, processedUrl: cached };
+          if (cached && cached.expiresAt > Date.now() + getUrlExpiryBuffer() * 1000) { // Use config buffer
+            return { ...item, processedUrl: cached.url };
           }
           if (failedCacheRef.current.has(cacheKey)) {
             return { ...item, processedUrl: item.url };
@@ -89,7 +95,10 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
 
           // Якщо це blob URL (оптимістичне повідомлення), використовуємо як є
           if (item.url.startsWith('blob:')) {
-            processedCacheRef.current.set(cacheKey, item.url);
+            processedCacheRef.current.set(cacheKey, {
+              url: item.url,
+              expiresAt: Date.now() + 1000 * 60 * 60 * 24, // 24 hours for blob URLs
+            });
             return { ...item, processedUrl: item.url };
           }
 
@@ -102,14 +111,20 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
             const ref = extractStorageRef(item.url);
             if (ref) {
               const resolvedUrl = await getUrl(ref.bucket, ref.path, {
-                expiresIn: storageConfig.defaultSignedUrlExpiry,
+                expiresIn: storageConfig.defaults.signedUrlExpiry,
               });
-              processedCacheRef.current.set(cacheKey, resolvedUrl);
+              processedCacheRef.current.set(cacheKey, {
+                url: resolvedUrl,
+                expiresAt: Date.now() + (storageConfig.defaults.signedUrlExpiry * 1000),
+              });
               return { ...item, processedUrl: resolvedUrl };
             }
 
             // If not a Supabase storage URL, use as-is
-            processedCacheRef.current.set(cacheKey, item.url);
+            processedCacheRef.current.set(cacheKey, {
+              url: item.url,
+              expiresAt: Date.now() + 1000 * 60 * 60 * 24, // 24 hours for public URLs
+            });
             return { ...item, processedUrl: item.url };
           } catch (_error) {
             // Avoid spamming errors for missing/legacy paths; fall back to original URL
@@ -139,7 +154,8 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
           const url = item.processedUrl || item.url;
           const cacheKey = `${item.id}:${item.url}`;
           // Only add to loading if not already cached and not already loading
-          return !processedCacheRef.current.has(cacheKey) && !loadingImages.has(url) ? url : null;
+          const cached = processedCacheRef.current.get(cacheKey);
+          return (!cached || cached.expiresAt <= Date.now()) && !loadingImages.has(url) ? url : null;
         })
         .filter((url): url is string => url !== null);
       
@@ -150,6 +166,41 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
 
     processUrls();
   }, [items, getUrl]);
+
+  // Set up periodic expiry check
+  useEffect(() => {
+    const checkExpiredUrls = () => {
+      const now = Date.now();
+      let hasExpired = false;
+      
+      // Check for expired URLs and remove them from cache (with config buffer)
+      for (const [key, cached] of processedCacheRef.current.entries()) {
+        if (cached.expiresAt <= now + getUrlExpiryBuffer() * 1000) { // Use config buffer
+          processedCacheRef.current.delete(key);
+          hasExpired = true;
+        }
+      }
+      
+      // If any URLs expired, trigger reprocessing
+      if (hasExpired && items && items.length > 0) {
+        // This will trigger the main processing useEffect
+        setProcessedItems([]);
+      }
+    };
+
+    // Check immediately
+    checkExpiredUrls();
+    
+    // Set up interval to check using config value
+    expiryCheckIntervalRef.current = setInterval(checkExpiredUrls, getUrlCheckInterval() * 1000);
+
+    return () => {
+      if (expiryCheckIntervalRef.current) {
+        clearInterval(expiryCheckIntervalRef.current);
+        expiryCheckIntervalRef.current = null;
+      }
+    };
+  }, [items]);
 
   if (!items || items.length === 0) {
     return <div className="hidden" />;

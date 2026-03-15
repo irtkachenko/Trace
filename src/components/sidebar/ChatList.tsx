@@ -30,35 +30,14 @@ function ChatListBase() {
   // Об'єднуємо всі сторінки в один масив
   const chats = data?.pages.flat() || [];
 
-  // Debug для пагінації
-  console.log('📄 Chat pagination:', {
-    pagesCount: data?.pages.length || 0,
-    pagesLengths: data?.pages.map((p) => p.length) || [],
-    totalAfterFlat: chats.length,
-  });
 
   // Debug лог для Virtuoso
   const validChats = useMemo(() => {
     const filtered = chats.filter((chat) => chat?.id);
     const duplicateCheck = new Set(filtered.map((c) => c.id)).size !== filtered.length;
 
-    console.log('🔍 Chats for Virtuoso:', {
-      total: chats.length,
-      valid: filtered.length,
-      ids: filtered.map((c) => c.id),
-      hasDuplicates: duplicateCheck,
-      firstItem: filtered[0],
-      lastItem: filtered[filtered.length - 1],
-    });
-
     if (duplicateCheck) {
       console.error('❌ DUPLICATE CHAT IDS DETECTED!');
-    }
-
-    // Захист від порожніх даних
-    if (filtered.length === 0) {
-      console.log('📭 No chats to render, returning empty array');
-      return [];
     }
 
     return filtered;
@@ -85,15 +64,6 @@ function ChatListBase() {
     const chatDisplayTitle = partner?.name || chat.title || 'Користувач Trace';
     const partnerImage = partner?.image;
 
-    // Debug logging to help identify missing partner data
-    if (!partner) {
-      console.warn('Chat missing partner data:', {
-        chatId: chat.id,
-        userId: chat.user_id,
-        recipientId: chat.recipient_id,
-        currentUserId,
-      });
-    }
 
     const lastMessage = chat.messages?.[0];
 
@@ -126,6 +96,7 @@ function ChatListBase() {
                       src={partnerImage}
                       alt={chatDisplayTitle}
                       fill
+                      sizes="40px"
                       className="object-cover"
                     />
                   </div>

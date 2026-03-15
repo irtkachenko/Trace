@@ -1,5 +1,5 @@
 import type { StorageConfigResponse } from '@/config/storage.config';
-import { isPrivateBucket, storageConfig } from '@/config/storage.config';
+import { storageConfig } from '@/config/storage.config';
 import { supabase } from '@/lib/supabase/client';
 import { handleError } from '@/shared/lib/error-handler';
 import { NetworkError } from '@/shared/lib/errors';
@@ -39,7 +39,7 @@ export const storageApi = {
    */
   getSignedUrl: async (bucket: string, path: string, options?: SignedUrlOptions) => {
     try {
-      const { data, error: signedUrlError } = supabase.storage
+      const { data, error: signedUrlError } = await supabase.storage
         .from(bucket)
         .createSignedUrl(path, options?.expiresIn ?? 3600, {
           download: options?.download,
@@ -75,10 +75,13 @@ export const storageApi = {
    */
   getUrl: async (bucket: string, path: string, options?: SignedUrlOptions) => {
     try {
-      if (isPrivateBucket(bucket)) {
+      // Check if bucket is private (attachments bucket is private by default)
+      const isPrivate = bucket === storageConfig.bucketNames.attachments;
+      
+      if (isPrivate) {
         const { data, error } = await supabase.storage
           .from(bucket)
-          .createSignedUrl(path, options?.expiresIn ?? storageConfig.defaultSignedUrlExpiry, {
+          .createSignedUrl(path, options?.expiresIn ?? storageConfig.defaults.signedUrlExpiry, {
             download: options?.download,
             transform: options?.transform,
           });
@@ -149,12 +152,12 @@ export const storageApi = {
       upsert: false,
     });
 
-    // Отримуємо пряме посилання
-    const publicUrl = await storageApi.getPublicUrl('attachments', filePath);
+    // Отримуємо signed URL для приватного bucket
+    const signedUrl = await storageApi.getSignedUrl('attachments', filePath);
 
     const attachment: Attachment = {
       id: `attachment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      url: publicUrl,
+      url: signedUrl,
       type: file.type.startsWith('image/')
         ? 'image'
         : file.type.startsWith('video/')

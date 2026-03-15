@@ -3,12 +3,12 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
-import { isAllowedFileExtension, storageConfig } from '@/config/storage.config';
+import { storageConfig } from '@/config/storage.config';
+import { getMaxFilesPerMessage } from '@/config/upload.config';
 import { handleError } from '@/shared/lib/error-handler';
 import { AuthError, ValidationError } from '@/shared/lib/errors';
 import type { Attachment } from '@/types';
 import { useStorageLimits } from './useDynamicStorageConfig';
-import { usePerformanceMonitor } from '@/lib/performance';
 
 export interface LazyAttachment {
   id: string;
@@ -28,12 +28,10 @@ export function useOptimisticAttachmentLazy() {
   const { user } = useSupabaseAuth();
   const { validateFile, validateFiles } = useStorageLimits();
   
-  // Performance monitoring
-  usePerformanceMonitor('useOptimisticAttachmentLazy');
-
+  
   // Константи для лімітів
-  const MAX_FILES_PER_MESSAGE = 4; // Змінено на 4 файли
-  const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB
+  const MAX_FILES_PER_MESSAGE = getMaxFilesPerMessage();
+  // Note: max total size comes from Supabase Storage API via useStorageLimits
 
   // Очищення URL-прев'ю при розмонтуванні компонента
   useEffect(() => {
@@ -116,6 +114,9 @@ export function useOptimisticAttachmentLazy() {
 
     // Розраховуємо скільки файлів можна додати
     const remainingSlots = MAX_FILES_PER_MESSAGE - currentFilesCount;
+    // Note: max total size comes from Supabase Storage API via useStorageLimits
+    // For now, use the same default as in useDynamicStorageConfig
+    const MAX_TOTAL_SIZE = 100 * 1024 * 1024; // 100MB
     const remainingSize = MAX_TOTAL_SIZE - currentTotalSize;
 
     let addedSize = 0;
@@ -132,7 +133,7 @@ export function useOptimisticAttachmentLazy() {
     if (rejectedFiles.length > 0) {
       const rejectedNames = rejectedFiles.map((f) => f.name).join(', ');
       toast.error(
-        `Забагато файлів! Максимально 4 файли на повідомлення. Не додано: ${rejectedNames}`,
+        `Забагато файлів! Максимально ${getMaxFilesPerMessage()} файли на повідомлення. Не додано: ${rejectedNames}`,
       );
     }
 

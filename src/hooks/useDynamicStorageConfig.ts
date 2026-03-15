@@ -1,13 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import {
-  getFileTypeCategory,
-  getMimeTypeCategory,
-  isAllowedFileExtension,
-  storageConfig,
-} from '@/config/storage.config';
-import { type StorageConfig, useStorageConfig } from './useStorageConfig';
+import { getDefaultMaxFileSize } from '@/config/storage.config';
+import { useStorageConfig } from './useStorageConfig';
+import { getMaxFilesPerMessage } from '@/config/upload.config';
 
 interface StoragePolicies {
   maxFileSize: number;
@@ -20,10 +16,10 @@ interface StoragePolicies {
 // Default fallback configuration
 const DEFAULT_POLICIES: StoragePolicies = {
   maxFileSize: 50 * 1024 * 1024, // 50MB
-  allowedExtensions: storageConfig.buckets.attachments.allowedExtensions,
+  allowedExtensions: [], // Will be populated from Supabase API
   rateLimitPerMinute: 10,
   maxTotalSize: 100 * 1024 * 1024, // 100MB загальний ліміт на повідомлення
-  maxFilesPerMessage: 4, // Змінено на 4 файли на повідомлення
+  maxFilesPerMessage: getMaxFilesPerMessage(), // Використовуємо конфіг додатку
 };
 
 export function useDynamicStorageConfig() {
@@ -34,21 +30,21 @@ export function useStorageLimits() {
   const { data: config, isLoading } = useDynamicStorageConfig();
 
   const getMaxFileSize = (category: 'images' | 'videos' | 'documents'): number => {
-    if (!config) return storageConfig.fileTypes[category].maxFileSize;
+    if (!config) return getDefaultMaxFileSize();
 
     // Convert string to bytes and use dynamic limit
     const dynamicMaxSize = parseInt(config.limits.maxFileSize);
-    const categoryMaxSize = storageConfig.fileTypes[category].maxFileSize;
-    return Math.min(dynamicMaxSize, categoryMaxSize);
+    const fallbackSize = getDefaultMaxFileSize();
+    return Math.min(dynamicMaxSize, fallbackSize);
   };
 
   const isAllowedExtension = (extension: string): boolean => {
     const ext = extension.toLowerCase();
-    if (!config) return isAllowedFileExtension(ext);
+    if (!config) return false; // No fallback - require API
 
     // If server returns MIME types (e.g. image/png), extension matching is not reliable.
     // Keep extension-based fallback using static config.
-    return isAllowedFileExtension(ext);
+    return false; // Will be handled by MIME validation
   };
 
   const isAllowedMimeType = (mimeType: string): boolean => {
@@ -56,11 +52,30 @@ export function useStorageLimits() {
 
     if (!mimeType) return true;
 
-    return config.limits.allowedTypes.some((type) => {
-      // type may be exact MIME (image/png) or wildcard (image/*)
-      const pattern = `^${type.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`;
-      return new RegExp(pattern, 'i').test(mimeType);
-    });
+    // Check if allowedTypes contains MIME types (has '/') or extensions (no '/')
+    const hasMimeTypes = config.limits.allowedTypes.some(type => type.includes('/'));
+    
+    if (hasMimeTypes) {
+      // Use MIME type validation
+      return config.limits.allowedTypes.some((type) => {
+        // type may be exact MIME (image/png) or wildcard (image/*)
+        const pattern = `^${type.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`;
+        return new RegExp(pattern, 'i').test(mimeType);
+      });
+    } else {
+      // Fallback to extension validation if only extensions are provided
+      // Extract extension from MIME type or use common mappings
+      const extensionFromMime = mimeType.split('/')[1]?.toLowerCase();
+      if (extensionFromMime) {
+        return config.limits.allowedTypes.some(ext => 
+          ext.toLowerCase() === `.${extensionFromMime}` || 
+          ext.toLowerCase() === extensionFromMime
+        );
+      }
+      // If we can't extract extension from MIME, allow the file
+      // This prevents false negatives when bucket is not found
+      return true;
+    }
   };
 
   const getRateLimit = (): number => {
@@ -71,24 +86,29 @@ export function useStorageLimits() {
   const validateFile = (file: File): { valid: boolean; error?: string } => {
     const extension = file.name.split('.').pop()?.toLowerCase() || '';
 
-    // Prefer MIME validation (Supabase returns allowed_mime_types)
+    // Prefer MIME validation if available
     if (config && !isAllowedMimeType(file.type)) {
-      return { valid: false, error: 'Тип файлу не підтримується' };
+      // Try extension fallback if MIME validation fails
+      if (!config.limits.allowedTypes.some(type => type.includes('/'))) {
+        // Only extensions are provided, check extension directly
+        const fileExt = `.${extension}`;
+        const allowedExtension = config.limits.allowedTypes.some(ext => 
+          ext.toLowerCase() === fileExt || ext.toLowerCase() === extension
+        );
+        if (!allowedExtension) {
+          return { valid: false, error: 'Тип файлу не підтримується' };
+        }
+      } else {
+        return { valid: false, error: 'Тип файлу не підтримується' };
+      }
     }
 
-    // Fallback to extension validation only when we don't have a config yet
-    if (!config && !isAllowedExtension(extension)) {
-      return { valid: false, error: 'Тип файлу не підтримується' };
+    // Fallback: no validation without API config
+    if (!config) {
+      return { valid: false, error: 'Сервіс тимчасово недоступний' };
     }
 
-    const category = file.type
-      ? (getMimeTypeCategory(file.type) ?? getFileTypeCategory(extension))
-      : getFileTypeCategory(extension);
-    if (!category) {
-      return { valid: false, error: 'Невідомий тип файлу' };
-    }
-
-    const maxSize = getMaxFileSize(category);
+    const maxSize = getMaxFileSize('images'); // Use default category for size check
     if (file.size > maxSize) {
       const maxSizeMB = Math.round(maxSize / 1024 / 1024);
       return {

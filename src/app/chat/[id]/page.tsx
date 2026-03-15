@@ -21,10 +21,13 @@ import { usePresence } from '@/hooks/user';
 import { formatRelativeTime } from '@/lib/date-utils';
 import type { Message, User } from '@/types';
 
-export default function ChatPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function ChatPage({ params }: { params: Promise<{ id: string }> | { id: string } }) {
+  // Handle both Promise and object formats for Next.js compatibility
+  const resolvedParams = 'then' in params ? use(params) : params;
+  const { id } = resolvedParams;
   const router = useRouter();
   const { user, supabaseUser } = useSupabaseAuth();
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
 
   const { data: chat, isLoading: isChatLoading, isError } = useChatDetails(id);
   const {
@@ -33,13 +36,12 @@ export default function ChatPage({ params }: { params: Promise<{ id: string }> }
     fetchPreviousPage,
     hasPreviousPage,
     isFetchingPreviousPage,
-  } = useMessages(id);
+  } = useMessages(id, virtuosoRef);
 
   const { typingUsers, setTyping } = useChatEvents(id, supabaseUser);
   const { onlineUsers } = usePresence();
   const deleteMessage = useDeleteMessage(id);
 
-  const virtuosoRef = useRef<VirtuosoHandle>(null);
   const { scrollToMessage, highlightedId } = useScrollToMessage(
     virtuosoRef,
     messages,
