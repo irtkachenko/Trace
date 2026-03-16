@@ -1,8 +1,7 @@
 -- Schedule the rate limit cleanup task using pg_cron
 -- This is the cheapest and most reliable way to automate cleanup on Supabase
 
--- 1) Enable pg_cron if not already enabled (usually requires superuser, 
--- but on Supabase we usually have it if the extension is created)
+-- 1) Enable pg_cron if not already enabled
 create extension if not exists "pg_cron" with schema "pg_catalog";
 
 -- 2) Schedule the cleanup function to run every day at 3:00 AM
@@ -31,11 +30,11 @@ end;
 $$;
 
 -- 4) Schedule the task
--- 'cron.schedule' takes (job_name, schedule, command)
 select cron.schedule(
     'delete-expired-storage-assets',
     '0 4 * * *',
     $$ select public.delete_expired_assets() $$
 );
 
+comment on function public.cleanup_rate_limits() is 'Cleans up rate limit logs older than 24h. Scheduled via pg_cron.';
 comment on function public.delete_expired_assets() is 'Deletes storage objects older than 24h from attachments bucket.';
