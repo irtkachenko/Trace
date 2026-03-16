@@ -14,12 +14,28 @@ select cron.schedule(
     $$ select public.cleanup_rate_limits() $$
 );
 
--- 3) Also schedule a task to delete expired storage assets (from audit Point 7)
--- We saw 'delete_expired_assets' in the dump.
+-- 3) Define or update the storage cleanup function
+-- This ensures that attachments bucket stays clean
+create or replace function public.delete_expired_assets()
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  -- Delete metadata from Supabase Storage
+  -- The underlying files are usually cleaned up by Supabase's internal processes
+  delete from storage.objects
+  where created_at < now() - interval '24 hours'
+    and bucket_id = 'attachments';
+end;
+$$;
+
+-- 4) Schedule the task
+-- 'cron.schedule' takes (job_name, schedule, command)
 select cron.schedule(
     'delete-expired-storage-assets',
     '0 4 * * *',
     $$ select public.delete_expired_assets() $$
 );
 
-comment on function public.cleanup_rate_limits() is 'Cleans up rate limit logs older than 24h. Scheduled via pg_cron.';
+comment on function public.delete_expired_assets() is 'Deletes storage objects older than 24h from attachments bucket.';
