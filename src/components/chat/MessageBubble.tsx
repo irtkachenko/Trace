@@ -60,11 +60,17 @@ const MessageBubble = memo(
     return (
       <motion.div
         id={`message-${message.id}`}
+        key={message.client_id || message.id}
+        layoutId={message.client_id || message.id}
         data-highlighted={isHighlighed}
-        layout
-        transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ 
+          duration: 0.2, 
+          ease: 'easeOut'
+        }}
         className={cn(
-          'flex w-full mb-3 px-2.5 sm:px-4 transition-all duration-500 relative',
+          'flex w-full mb-3 px-2.5 sm:px-4 transition-all duration-300 relative',
           isMe ? 'justify-end' : 'justify-start',
         )}
       >

@@ -43,17 +43,22 @@ export default function ChatInput({
   const sendMessageWithFiles = useSendMessageWithFiles(chatId);
   const editMessage = useEditMessage(chatId);
 
-  // Оновлення контенту при редагуванні
+  // Оновлення контенту при редагуванні та фокус
   useEffect(() => {
     if (editingMessage) {
       setContent(editingMessage.content || '');
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-      }
+      setTimeout(() => textareaRef.current?.focus(), 50);
     } else {
       setContent('');
     }
   }, [editingMessage]);
+
+  // Фокус при реплаї
+  useEffect(() => {
+    if (replyToId) {
+      setTimeout(() => textareaRef.current?.focus(), 50);
+    }
+  }, [replyToId]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -71,7 +76,7 @@ export default function ChatInput({
 
   useEffect(() => {
     adjustTextareaHeight();
-  }, [content, adjustTextareaHeight]);
+  }, [adjustTextareaHeight]);
 
   // Знаходимо повідомлення для реплаю в кеші
   const replyToMessage = !replyToId
@@ -88,11 +93,13 @@ export default function ChatInput({
 
     if (!trimmed && !hasFiles) return;
 
+    // Очищуємо стан введення НЕГАЙНО для кращого UX
     setContent('');
     setTyping(false);
-
     const filesToSend = attachments.map((a) => a.file);
     clearAttachments();
+    if (onReplyCancel) onReplyCancel();
+    if (onEditCancel) onEditCancel();
 
     try {
       if (editingMessage) {
@@ -107,7 +114,6 @@ export default function ChatInput({
           messageId: editingMessage.id,
           content: trimmed,
         });
-        if (onEditCancel) onEditCancel();
       } else {
         // ВІДПРАВКА НОВОГО
         const clientId = crypto.randomUUID();
@@ -117,7 +123,6 @@ export default function ChatInput({
           reply_to_id: replyToId || undefined,
           client_id: clientId,
         });
-        if (onReplyCancel) onReplyCancel();
       }
 
       if (onMessageSent) onMessageSent();

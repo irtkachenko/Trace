@@ -135,21 +135,19 @@ export default function ChatPage() {
     chat,
   ]);
 
-  // Auto-scroll to bottom when messages are loaded (hide under loader first render)
+  // Auto-scroll to bottom only on INITIAL load
   useEffect(() => {
-    if (!isMessagesLoading && messages.length > 0) {
+    if (!isMessagesLoading && messages.length > 0 && !initialScrollDone) {
       requestAnimationFrame(() => {
         virtuosoRef.current?.scrollToIndex({
           index: messages.length - 1,
           behavior: 'auto',
           align: 'end',
         });
-        if (!initialScrollDone) {
-          setInitialScrollDone(true);
-          setTimeout(() => setPostScrollDelayDone(true), 120);
-        }
+        setInitialScrollDone(true);
+        setTimeout(() => setPostScrollDelayDone(true), 120);
       });
-    } else if (!isMessagesLoading && messages.length === 0) {
+    } else if (!isMessagesLoading && messages.length === 0 && !initialScrollDone) {
       setInitialScrollDone(true);
       setPostScrollDelayDone(true);
     }
@@ -249,7 +247,9 @@ export default function ChatPage() {
           <Virtuoso
             ref={virtuosoRef}
             data={messages}
-            followOutput="smooth"
+            followOutput="auto"
+            overscan={500}
+            increaseViewportBy={{ bottom: 200, top: 0 }}
             className="no-scrollbar"
             atBottomStateChange={(atBottom) => {
               setShowScrollButton(!atBottom);
@@ -273,9 +273,11 @@ export default function ChatPage() {
                 currentMessageIndex <= recipientLastReadIndex;
 
               return (
-                <div className="px-2 sm:px-6 lg:px-8 max-w-5xl mx-auto w-full py-0.5">
+                <div 
+                  key={message.client_id || message.id} 
+                  className="px-2 sm:px-6 lg:px-8 max-w-5xl mx-auto w-full py-0.5"
+                >
                   <MessageBubble
-                    key={message.id}
                     message={message}
                     currentUserId={user?.id}
                     isRead={
@@ -311,7 +313,7 @@ export default function ChatPage() {
                   ) : null}
                 </div>
               ),
-              Footer: () => <div className="h-6 w-full" />,
+              Footer: () => <div className="h-10 w-full" />,
             }}
           />
         ) : null}
@@ -371,13 +373,15 @@ export default function ChatPage() {
               setEditingMessage(null);
 
               if (!wasEditing) {
-                requestAnimationFrame(() => {
+                // Скролимо до messages.length (без -1), щоб потрапити на саме нове повідомлення,
+                // навіть якщо стейт оновлюється з невеликою затримкою.
+                setTimeout(() => {
                   virtuosoRef.current?.scrollToIndex({
                     index: messages.length,
                     behavior: 'smooth',
                     align: 'end',
                   });
-                });
+                }, 50);
               }
             }}
           />

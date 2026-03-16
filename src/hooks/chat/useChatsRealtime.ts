@@ -58,14 +58,17 @@ export function useChatsRealtime(user: User | null) {
               const newPages = [...old.pages];
               newPages[existingPageIdx] = newPages[existingPageIdx].map((m) => {
                 if (m.id === msg.id || (m.client_id && m.client_id === msg.client_id)) {
-                  // MERGE: Keep existing reply_details if the new message is 'naked'
+                  // MERGE: Зберігаємо ідентичність (client_id та created_at)
                   return {
                     ...m,
                     ...msg,
+                    // Гарантуємо, що client_id не затреться, бо це наш КЛЮЧ
+                    client_id: m.client_id || msg.client_id,
+                    created_at: m.created_at || msg.created_at,
+                    id: m.id.startsWith('temp-') ? msg.id : m.id,
                     reply_details: msg.reply_details || m.reply_details,
                     reply_to: msg.reply_to || m.reply_to,
-                    // If we moved from temp to real ID, ensure is_optimistic is cleared
-                    is_optimistic: msg.is_optimistic ?? false,
+                    is_optimistic: false,
                   };
                 }
                 return m;
@@ -83,21 +86,25 @@ export function useChatsRealtime(user: User | null) {
         );
       };
 
-      // 2. Show naked message immediately (merged with optimistic if exists)
-      updateMessageInCache(nakedMessage);
-
       // 3. Hydrate message if it's from another user or missing reply details
-      // If we are the sender, onSuccess will handle full hydration better
-      const isFromMe = nakedMessage.sender_id === user?.id || (nakedMessage.client_id && nakedMessage.client_id.length > 0);
-      const needsHydration = !nakedMessage.reply_to && nakedMessage.reply_to_id;
+      const isFromMe = nakedMessage.sender_id === user?.id;
+      const needsHydration = !!nakedMessage.reply_to_id && !nakedMessage.reply_to;
 
+      // UX Optimization: If it's a message from someone else and NEEDS hydration (like a reply),
+      // we DON'T show the "naked" version first to avoid the "flashing" effect 
+      // where the reply block appears and disappears.
       if (!isFromMe && needsHydration) {
         try {
           const fullMessage = await messagesApi.getMessage(nakedMessage.id);
           updateMessageInCache(fullMessage);
         } catch (err) {
           console.warn('Failed to fetch hydrated message for realtime insert:', err);
+          // Fallback to naked if hydration fails
+          updateMessageInCache(nakedMessage);
         }
+      } else {
+        // Just show it immediately if it's from us or doesn't need complex data
+        updateMessageInCache(nakedMessage);
       }
     };
 

@@ -334,19 +334,18 @@ export function useSendMessageWithFiles(chatId: string) {
           ...old,
           pages: old.pages.map((page) =>
             page.map((msg) => {
-              // Match by client_id to replace either the optimistic temp- message
-              // or the naked message already received via realtime
-              const isMatch = (msg.client_id && msg.client_id === clientId) || 
+              const matches = (msg.client_id && msg.client_id === clientId) || 
                              (msg.client_id && msg.client_id === message.client_id);
                              
-              if (isMatch) {
+              if (matches) {
+                // ВАЖЛИВО: Ми накладаємо серверні дані на існуючий об'єкт,
+                // зберігаючи client_id та дату. Це ПОВНІСТЮ прибирає мерехтіння.
                 return {
-                  ...message,
-                  // Ensure we don't lose local state if the server response is somehow less complete
-                  reply_to_id: message.reply_to_id ?? msg.reply_to_id,
-                  reply_to: message.reply_to ?? msg.reply_to,
-                  reply_details: message.reply_details ?? msg.reply_details,
-                  is_optimistic: false, // Explicitly false
+                  ...msg,      // Початкові дані (з client_id та точною датою)
+                  ...message,  // Дані з сервера (ID, контент)
+                  client_id: msg.client_id || clientId, // Запасний варіант
+                  created_at: msg.created_at || message.created_at, // Не міняємо час
+                  is_optimistic: false,
                 };
               }
               return msg;
