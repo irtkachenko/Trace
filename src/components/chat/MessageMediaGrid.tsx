@@ -70,6 +70,8 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
   const { getUrl } = useStorageUrl();
   const pendingRef = useRef<Set<string>>(new Set());
   const failedCacheRef = useRef<Map<string, number>>(new Map());
+  const processingRef = useRef<Set<string>>(new Set()); // Rate limiting
+  const itemTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map()); // Per-item debouncing
 
   // Periodic refresh tick to re-check TTL
   useEffect(() => {
@@ -78,7 +80,7 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
 
     const id = setInterval(() => setRefreshTick((prev) => prev + 1), intervalMs);
     return () => clearInterval(id);
-  }, [getUrlCheckInterval]);
+  }, []);
 
   // Prune caches when items change
   useEffect(() => {
@@ -98,12 +100,20 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
       return changed ? next : prev;
     });
 
+    // Clear pending timeouts for items that no longer exist
+    itemTimeoutsRef.current.forEach((timeoutId, key) => {
+      if (!keys.has(key)) {
+        clearTimeout(timeoutId);
+        itemTimeoutsRef.current.delete(key);
+      }
+    });
+
     failedCacheRef.current.forEach((_value, key) => {
       if (!keys.has(key)) failedCacheRef.current.delete(key);
     });
-  }, [items]);
+  }, [items?.length, items?.map(item => `${item.id}:${item.url}`).join(',')]); // Memoize by content
 
-  // Resolve and refresh signed URLs
+  // Resolve and refresh signed URLs with per-item debouncing
   useEffect(() => {
     if (!items || items.length === 0) return;
 
@@ -133,32 +143,59 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
       if (!ref) return;
 
       if (pendingRef.current.has(cacheKey)) return;
-      pendingRef.current.add(cacheKey);
+      if (processingRef.current.has(cacheKey)) return; // Rate limiting
 
-      getUrl(ref.bucket, ref.path)
-        .then((resolvedUrl) => {
-          setProcessedUrls((prev) => {
-            const next = new Map(prev);
-            next.set(cacheKey, { url: resolvedUrl, expiresAt: Date.now() + expiryMs });
-            return next;
+      // Clear existing timeout for this item
+      const existingTimeout = itemTimeoutsRef.current.get(cacheKey);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+
+      // Set new timeout for this specific item
+      const timeoutId = setTimeout(() => {
+        itemTimeoutsRef.current.delete(cacheKey);
+        
+        pendingRef.current.add(cacheKey);
+        processingRef.current.add(cacheKey);
+
+        getUrl(ref.bucket, ref.path)
+          .then((resolvedUrl) => {
+            setProcessedUrls((prev) => {
+              const next = new Map(prev);
+              next.set(cacheKey, { url: resolvedUrl, expiresAt: Date.now() + expiryMs });
+              return next;
+            });
+            failedCacheRef.current.delete(cacheKey);
+            setFailedUrls((prev) => {
+              if (!prev.has(originalUrl)) return prev;
+              const next = new Set(prev);
+              next.delete(originalUrl);
+              return next;
+            });
+          })
+          .catch(() => {
+            failedCacheRef.current.set(cacheKey, Date.now());
+            setFailedUrls((prev) => new Set(prev).add(originalUrl));
+          })
+          .finally(() => {
+            pendingRef.current.delete(cacheKey);
+            processingRef.current.delete(cacheKey); // Clear rate limiting
           });
-          failedCacheRef.current.delete(cacheKey);
-          setFailedUrls((prev) => {
-            if (!prev.has(originalUrl)) return prev;
-            const next = new Set(prev);
-            next.delete(originalUrl);
-            return next;
-          });
-        })
-        .catch(() => {
-          failedCacheRef.current.set(cacheKey, Date.now());
-          setFailedUrls((prev) => new Set(prev).add(originalUrl));
-        })
-        .finally(() => {
-          pendingRef.current.delete(cacheKey);
-        });
+      }, 500); // 500ms debounce per item
+
+      itemTimeoutsRef.current.set(cacheKey, timeoutId);
     });
-  }, [items, getUrl, processedUrls, refreshTick, getUrlExpiryBuffer, getUrlCheckInterval]);
+  }, [items, getUrl, refreshTick, processedUrls, getUrlExpiryBuffer, getUrlCheckInterval]);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      itemTimeoutsRef.current.forEach((timeoutId) => {
+        clearTimeout(timeoutId);
+      });
+      itemTimeoutsRef.current.clear();
+    };
+  }, []);
 
   // Process attachment URLs for rendering
   const processedItems = useMemo(() => {

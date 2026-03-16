@@ -38,36 +38,25 @@ export const storageApi = {
    * Отримання signed URL для приватних файлів
    */
   getSignedUrl: async (bucket: string, path: string, options?: SignedUrlOptions) => {
-    try {
-      const { data, error: signedUrlError } = await supabase.storage
-        .from(bucket)
-        .createSignedUrl(path, options?.expiresIn ?? 3600, {
-          download: options?.download,
-          transform: options?.transform,
-        });
+    const { data, error: signedUrlError } = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(path, options?.expiresIn ?? 3600, {
+        download: options?.download,
+        transform: options?.transform,
+      });
 
-      if (signedUrlError) {
-        const error = new NetworkError(
-          `Failed to create signed URL: ${signedUrlError.message}`,
-          'storage',
-          'SIGNED_URL_ERROR',
-          signedUrlError.status || 500,
-        );
-        handleError(error, 'StorageApi.getSignedUrl');
-        throw error;
-      }
-
-      return data.signedUrl;
-    } catch (err) {
+    if (signedUrlError) {
       const error = new NetworkError(
-        `Failed to get signed URL for ${bucket}/${path}: ${err}`,
+        `Failed to create signed URL: ${signedUrlError.message}`,
         'storage',
         'SIGNED_URL_ERROR',
-        500,
+        signedUrlError.status || 500,
       );
       handleError(error, 'StorageApi.getSignedUrl');
       throw error;
     }
+
+    return data.signedUrl;
   },
 
   /**
