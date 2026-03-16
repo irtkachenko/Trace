@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { Paperclip, Send } from 'lucide-react';
@@ -30,8 +30,8 @@ export default function ChatInput({
   setTyping,
   replyToId,
   onReplyCancel,
-  editingMessage, // Added editingMessage prop
-  onEditCancel, // Added onEditCancel prop
+  editingMessage,
+  onEditCancel,
   onMessageSent,
 }: ChatInputProps) {
   const [content, setContent] = useState('');
@@ -40,11 +40,10 @@ export default function ChatInput({
     useOptimisticAttachmentLazy();
   const { data: storageConfig } = useStorageConfig();
 
-  // Використовуємо новий хук для паралельної відправки з файлами
   const sendMessageWithFiles = useSendMessageWithFiles(chatId);
   const editMessage = useEditMessage(chatId);
 
-  // Update content when editingMessage changes
+  // Оновлення контенту при редагуванні
   useEffect(() => {
     if (editingMessage) {
       setContent(editingMessage.content || '');
@@ -64,18 +63,14 @@ export default function ChatInput({
   const adjustTextareaHeight = useCallback(() => {
     const textarea = textareaRef.current;
     if (textarea) {
-      // eslint-disable-next-line react-hooks/immutability
       textarea.style.height = 'inherit';
       const scrollHeight = textarea.scrollHeight;
-      // eslint-disable-next-line react-hooks/immutability
       textarea.style.height = `${Math.min(scrollHeight, 200)}px`;
     }
   }, []);
 
   useEffect(() => {
     adjustTextareaHeight();
-    // We want to adjust height whenever content changes
-    // biome-ignore lint/correctness/useExhaustiveDependencies: content is needed to trigger the effect
   }, [content, adjustTextareaHeight]);
 
   // Знаходимо повідомлення для реплаю в кеші
@@ -91,20 +86,17 @@ export default function ChatInput({
     const trimmed = content.trim();
     const hasFiles = attachments.length > 0;
 
-    // Валідація - якщо немає ні тексту, ні файлів, не відправляємо
     if (!trimmed && !hasFiles) return;
 
-    // 1. Очищуємо UI миттєво (для відчуття швидкості)
     setContent('');
     setTyping(false);
 
-    // Отримуємо файли для відправки
     const filesToSend = attachments.map((a) => a.file);
     clearAttachments();
 
     try {
       if (editingMessage) {
-        // РЕДАГУВАННЯ (файли не підтримуються при редагуванні)
+        // РЕДАГУВАННЯ
         if (!trimmed) {
           toast.error('Повідомлення не може бути порожнім');
           setContent(trimmed);
@@ -117,7 +109,7 @@ export default function ChatInput({
         });
         if (onEditCancel) onEditCancel();
       } else {
-        // ВІДПРАВКА НОВОГО з файлами
+        // ВІДПРАВКА НОВОГО
         const clientId = crypto.randomUUID();
         await sendMessageWithFiles.mutateAsync({
           content: trimmed,
@@ -125,13 +117,11 @@ export default function ChatInput({
           reply_to_id: replyToId || undefined,
           client_id: clientId,
         });
-        // Clear reply state only after successful send
         if (onReplyCancel) onReplyCancel();
       }
 
       if (onMessageSent) onMessageSent();
     } catch (_error) {
-      // Якщо впало — повертаємо текст назад, щоб юзер не втратив повідомлення
       handleError(
         new NetworkError('Failed to process message', 'message', 'MESSAGE_PROCESS_ERROR', 500),
         'ChatInput',
