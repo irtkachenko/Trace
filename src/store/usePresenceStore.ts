@@ -1,8 +1,6 @@
-'use client';
-/* eslint-disable react-compiler/react-compiler */
 
 import type { RealtimeChannel, User } from '@supabase/supabase-js';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect } from 'react';
 import { create } from 'zustand';
 import {
   getHeartbeatInterval,
@@ -11,7 +9,6 @@ import {
   getPresenceDebounceDelay,
   getReconnectDelay,
 } from '@/config/presence.config';
-import { queryClient } from '@/lib/query-client';
 import { supabase } from '@/lib/supabase/client';
 
 interface PresenceState {
@@ -56,15 +53,39 @@ function createPresenceManager(): PresenceManager {
 }
 
 async function updateLastSeen(): Promise<void> {
+  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/rpc/update_last_seen`;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  
+  // Use fetch with keepalive for highest reliability on page leave
+  if (typeof window !== 'undefined' && anonKey) {
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      
+      void fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': anonKey,
+          'Authorization': token ? `Bearer ${token}` : '',
+        },
+        body: JSON.stringify({}),
+        keepalive: true,
+      });
+      return;
+    } catch {
+      // Fallback below
+    }
+  }
+
+  // Fallback to standard RPC
   try {
     const { error } = await supabase.rpc('update_last_seen');
-    if (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('Failed to update last seen:', error.message);
-      }
+    if (error && process.env.NODE_ENV === 'development') {
+      console.warn('Failed to update last seen:', error.message);
     }
   } catch {
-    // Silently fail — this is best-effort
+    // Silently fail
   }
 }
 
@@ -105,10 +126,10 @@ function startHeartbeat(manager: PresenceManager): void {
     clearInterval(manager.heartbeatInterval);
   }
   manager.heartbeatInterval = setInterval(() => {
-    if (manager.channel) {
+    if (manager.channel && manager.userId) {
       updateActivity(manager);
       manager.channel.track({
-        user_id: manager.userId!,
+        user_id: manager.userId,
         online_at: new Date().toISOString(),
       });
     }
@@ -157,23 +178,26 @@ function setupChannel(
   if (manager.channel) {
     manager.channel
       .on('presence', { event: 'sync' }, () => {
-        const state = manager.channel!.presenceState();
-        const onlineIds = new Set<string>();
-        for (const key of Object.keys(state)) {
-          onlineIds.add(key);
+        if (manager.channel) {
+          const state = manager.channel.presenceState();
+          const onlineIds = new Set<string>();
+          for (const key of Object.keys(state)) {
+            onlineIds.add(key);
+          }
+          debouncedPresenceUpdate(manager, setOnlineUsers, onlineIds);
         }
-        // Use debounced update to prevent render storms
-        debouncedPresenceUpdate(manager, setOnlineUsers, onlineIds);
       })
       .subscribe(async (status: string) => {
         switch (status) {
           case 'SUBSCRIBED':
             setConnectionState('CONNECTED');
             manager.reconnectAttempts = 0;
-            await manager.channel!.track({
-              user_id: userId,
-              online_at: new Date().toISOString(),
-            });
+            if (manager.channel) {
+              await manager.channel.track({
+                user_id: userId,
+                online_at: new Date().toISOString(),
+              });
+            }
             startHeartbeat(manager);
             break;
 
@@ -193,7 +217,10 @@ function setupChannel(
               setConnectionState('RECONNECTING');
 
               // Exponential backoff: 2s, 4s, 8s, 16s, 32s...
-              const delay = RECONNECT_DELAY * 2 ** (manager.reconnectAttempts - 1);
+              // Plus Jitter (±20%) to prevent "Thundering Herd"
+              const baseDelay = RECONNECT_DELAY * 2 ** (manager.reconnectAttempts - 1);
+              const jitter = baseDelay * 0.2 * (Math.random() * 2 - 1);
+              const delay = Math.max(0, baseDelay + jitter);
 
               setTimeout(() => {
                 if (manager.channel && manager.subscribers > 0) {

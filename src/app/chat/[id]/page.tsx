@@ -1,5 +1,4 @@
 'use client';
-/* eslint-disable react-hooks/set-state-in-effect */
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
