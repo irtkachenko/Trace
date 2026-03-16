@@ -107,7 +107,7 @@ const MessageBubble = memo(
                     id: rId,
                     sender: { name: null },
                     sender_id: null,
-                    content: '????????????...',
+                    content: 'Завантаження...',
                     attachments: null,
                   };
 

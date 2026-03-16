@@ -60,13 +60,42 @@ export function useMessages(chatId: string, isAtBottom: boolean) {
       return true;
     });
 
-    // Deduplication by id (keep the latest entry)
-    const seen = new Map<string, Message>();
+    // 2. Advanced deduplication by id AND client_id
+    const idMap = new Map<string, Message>();
+    const clientMap = new Map<string, string>(); // client_id -> message_id
+
     for (const msg of filtered) {
-      seen.set(msg.id, msg);
+      // Check if we already have this message by client_id
+      if (msg.client_id) {
+        const existingId = clientMap.get(msg.client_id);
+        if (existingId) {
+          const existingMsg = idMap.get(existingId);
+          // If existing is optimistic and current is real, replace it
+          if (existingMsg?.is_optimistic && !msg.is_optimistic) {
+            idMap.delete(existingId);
+            idMap.set(msg.id, msg);
+            clientMap.set(msg.client_id, msg.id);
+            continue;
+          } else if (!existingMsg?.is_optimistic && msg.is_optimistic) {
+            // Already have the real message, ignore the late optimistic update
+            continue;
+          }
+        }
+        clientMap.set(msg.client_id, msg.id);
+      }
+
+      // Standard ID-based deduplication
+      const existing = idMap.get(msg.id);
+      if (!existing || (existing.is_optimistic && !msg.is_optimistic)) {
+        idMap.set(msg.id, msg);
+      }
     }
 
-    return Array.from(seen.values());
+    // Convert back to array while preserving temporal order if possible
+    // (Since we already filtered, sorting by created_at is safest)
+    return Array.from(idMap.values()).sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+    );
   }, [allMessages]);
 
   // Initialize new read detection hooks

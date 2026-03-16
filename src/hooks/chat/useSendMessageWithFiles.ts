@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query';
 import imageCompression from 'browser-image-compression';
@@ -334,18 +334,19 @@ export function useSendMessageWithFiles(chatId: string) {
           ...old,
           pages: old.pages.map((page) =>
             page.map((msg) => {
-              // Замінюємо оптимістичне повідомлення на реальне
-              if (
-                msg.id.toString().startsWith('temp-') &&
-                (msg.client_id === clientId || msg.client_id === message.client_id)
-              ) {
-                // Зберігаємо reply-контекст з оптимістичного повідомлення,
-                // якщо сервер ще не повернув повні reply-дані
+              // Match by client_id to replace either the optimistic temp- message
+              // or the naked message already received via realtime
+              const isMatch = (msg.client_id && msg.client_id === clientId) || 
+                             (msg.client_id && msg.client_id === message.client_id);
+                             
+              if (isMatch) {
                 return {
                   ...message,
+                  // Ensure we don't lose local state if the server response is somehow less complete
                   reply_to_id: message.reply_to_id ?? msg.reply_to_id,
                   reply_to: message.reply_to ?? msg.reply_to,
                   reply_details: message.reply_details ?? msg.reply_details,
+                  is_optimistic: false, // Explicitly false
                 };
               }
               return msg;

@@ -42,6 +42,7 @@ export interface Attachment {
     height?: number;
     expired?: boolean;
   };
+  uploading?: boolean;
 }
 
 /**

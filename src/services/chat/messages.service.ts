@@ -3,6 +3,16 @@ import { handleError } from '@/shared/lib/error-handler';
 import { NetworkError } from '@/shared/lib/errors';
 import type { Attachment, Message } from '@/types';
 
+const MESSAGES_SELECT = `
+  *,
+  sender:sender_id(id, name, image),
+  reply_to:reply_to_id(
+    *,
+    sender:sender_id(id, name, image)
+  ),
+  updated_at
+`;
+
 export const messagesApi = {
   /**
    * Fetch chat messages with pagination support
@@ -10,7 +20,7 @@ export const messagesApi = {
   getMessages: async (chatId: string, cursor?: string) => {
     const { data, error } = await supabase
       .from('messages')
-      .select('*, reply_to:reply_to_id(*), "users":sender_id(id, name, image), updated_at')
+      .select(MESSAGES_SELECT)
       .eq('chat_id', chatId)
       .order('created_at', { ascending: false })
       .limit(50)
@@ -90,7 +100,7 @@ export const messagesApi = {
   getMessage: async (messageId: string) => {
     const { data, error } = await supabase
       .from('messages')
-      .select('*, reply_to:reply_to_id(*), "users":sender_id(id, name, image), updated_at')
+      .select(MESSAGES_SELECT)
       .eq('id', messageId)
       .single();
 

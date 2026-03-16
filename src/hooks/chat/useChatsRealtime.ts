@@ -1,9 +1,9 @@
-﻿'use client';
+'use client';
 
 import type { RealtimeChannel, User } from '@supabase/supabase-js';
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
-import { type RealtimeMessagePayload, realtimeApi } from '@/services';
+import { type RealtimeMessagePayload, realtimeApi, messagesApi } from '@/services';
 import { handleError } from '@/shared/lib/error-handler';
 import { NetworkError } from '@/shared/lib/errors';
 import type { FullChat, Message } from '@/types';
@@ -31,71 +31,135 @@ export function useChatsRealtime(user: User | null) {
     const channel = realtimeApi.createMessagesChannel();
     channelRef.current = channel;
 
-    const handleInsert = (payload: RealtimeMessagePayload) => {
+    const handleInsert = async (payload: RealtimeMessagePayload) => {
       if (!payload.new || typeof payload.new !== 'object' || !('id' in payload.new)) return;
 
-      const newMessage = payload.new as Message;
-
-      // 1. Update chat list (last message preview)
-      queryClient.setQueryData(['chats'], (old: InfiniteData<FullChat[]> | undefined) =>
-        upsertChatLastMessage(old, newMessage.chat_id, newMessage),
-      );
-
-      // 2. Update specific chat messages cache
-      queryClient.setQueryData<InfiniteData<Message[]>>(
-        ['messages', newMessage.chat_id],
-        (old) => {
-          if (!old) return old;
-
-        // Check for duplicates (if we sent the message ourselves and already have an optimistic or real entry)
-        const exists = old.pages.some((page: Message[]) =>
-          page.some((m) => m.id === newMessage.id),
+      const nakedMessage = payload.new as Message;
+      
+      // 1. Helper to update cache
+      const updateMessageInCache = (msg: Message) => {
+        // Update chat list (last message preview)
+        queryClient.setQueryData(['chats'], (old: InfiniteData<FullChat[]> | undefined) =>
+          upsertChatLastMessage(old, msg.chat_id, msg),
         );
-        if (exists) return old;
 
-        const newPages = [...old.pages];
-        const lastPageIdx = newPages.length - 1;
-        newPages[lastPageIdx] = [...newPages[lastPageIdx], newMessage];
+        // Update specific chat messages cache
+        queryClient.setQueryData<InfiniteData<Message[]>>(
+          ['messages', msg.chat_id],
+          (old) => {
+            if (!old) return old;
 
-          return { ...old, pages: newPages };
-        },
-      );
+            // Check for existing message by ID or client_id (optimistic check)
+            const existingPageIdx = old.pages.findIndex((page) =>
+              page.some((m) => m.id === msg.id || (m.client_id && m.client_id === msg.client_id)),
+            );
+
+            if (existingPageIdx !== -1) {
+              const newPages = [...old.pages];
+              newPages[existingPageIdx] = newPages[existingPageIdx].map((m) => {
+                if (m.id === msg.id || (m.client_id && m.client_id === msg.client_id)) {
+                  // MERGE: Keep existing reply_details if the new message is 'naked'
+                  return {
+                    ...m,
+                    ...msg,
+                    reply_details: msg.reply_details || m.reply_details,
+                    reply_to: msg.reply_to || m.reply_to,
+                    // If we moved from temp to real ID, ensure is_optimistic is cleared
+                    is_optimistic: msg.is_optimistic ?? false,
+                  };
+                }
+                return m;
+              });
+              return { ...old, pages: newPages };
+            }
+
+            // Append new message
+            const newPages = [...old.pages];
+            const lastPageIdx = newPages.length - 1;
+            newPages[lastPageIdx] = [...newPages[lastPageIdx], msg];
+
+            return { ...old, pages: newPages };
+          },
+        );
+      };
+
+      // 2. Show naked message immediately (merged with optimistic if exists)
+      updateMessageInCache(nakedMessage);
+
+      // 3. Hydrate message if it's from another user or missing reply details
+      // If we are the sender, onSuccess will handle full hydration better
+      const isFromMe = nakedMessage.sender_id === user?.id || (nakedMessage.client_id && nakedMessage.client_id.length > 0);
+      const needsHydration = !nakedMessage.reply_to && nakedMessage.reply_to_id;
+
+      if (!isFromMe && needsHydration) {
+        try {
+          const fullMessage = await messagesApi.getMessage(nakedMessage.id);
+          updateMessageInCache(fullMessage);
+        } catch (err) {
+          console.warn('Failed to fetch hydrated message for realtime insert:', err);
+        }
+      }
     };
 
-    const handleUpdate = (payload: RealtimeMessagePayload) => {
+    const handleUpdate = async (payload: RealtimeMessagePayload) => {
       if (!payload.new || typeof payload.new !== 'object' || !('id' in payload.new)) return;
 
-      const updatedMessage = payload.new as Message;
-      if (!updatedMessage?.id || !updatedMessage?.chat_id) return;
+      const nakedMessage = payload.new as Message;
+      if (!nakedMessage?.id || !nakedMessage?.chat_id) return;
 
-      const normalizedMessage = {
-        ...(updatedMessage as Message),
-        attachments: (updatedMessage.attachments as Message['attachments']) || [],
-      } as Message;
+      // 1. Helper to update cache
+      const updateMessageInCache = (msg: Message) => {
+        const normalizedMessage = {
+          ...msg,
+          attachments: msg.attachments || [],
+        } as Message;
 
-      // 1. Update chat list
-      queryClient.setQueryData(['chats'], (old: InfiniteData<FullChat[]> | undefined) =>
-        updateChatMessageIfMatches(
-          old,
-          updatedMessage.chat_id,
-          (last) => last?.id === updatedMessage.id,
-          (chat) => ({ ...chat, messages: [normalizedMessage] }),
-        ),
-      );
+        // Update chat list
+        queryClient.setQueryData(['chats'], (old: InfiniteData<FullChat[]> | undefined) =>
+          updateChatMessageIfMatches(
+            old,
+            msg.chat_id,
+            (last) => last?.id === msg.id,
+            (chat) => ({ ...chat, messages: [normalizedMessage] }),
+          ),
+        );
 
-      // 2. Update specific message in chat messages cache
-      queryClient.setQueryData<InfiniteData<Message[]>>(
-        ['messages', updatedMessage.chat_id],
-        (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page: Message[]) =>
-              page.map((m) => (m.id === normalizedMessage.id ? normalizedMessage : m)),
-            ),
-          };
-        },
-      );
+        // Update specific message in chat messages cache
+        queryClient.setQueryData<InfiniteData<Message[]>>(
+          ['messages', msg.chat_id],
+          (old) => {
+            if (!old) return old;
+            return {
+              ...old,
+              pages: old.pages.map((page: Message[]) =>
+                page.map((m) => {
+                  if (m.id === normalizedMessage.id) {
+                    return {
+                      ...m,
+                      ...normalizedMessage,
+                      reply_details: normalizedMessage.reply_details || m.reply_details,
+                      reply_to: normalizedMessage.reply_to || m.reply_to,
+                    };
+                  }
+                  return m;
+                }),
+              ),
+            };
+          },
+        );
+      };
+
+      // 2. Update with naked message immediately
+      updateMessageInCache(nakedMessage);
+
+      // 3. Hydrate message if edits might have affected content/replies
+      // Usually updates don't change reply_to_id, but they change content
+      try {
+        const fullMessage = await messagesApi.getMessage(nakedMessage.id);
+        updateMessageInCache(fullMessage);
+      } catch (err) {
+        console.warn('Failed to fetch hydrated message for realtime update:', err);
+      }
     };
 
     const handleDelete = (payload: RealtimeMessagePayload) => {

@@ -97,10 +97,11 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
         // Start with loading state only for items that need URL resolution
         const needsUrlResolution =
           !item.url.startsWith('blob:') && extractStorageRef(item.url) !== null;
+        const isUploading = !!item.uploading;
         newStates.set(key, {
-          isLoading: needsUrlResolution,
+          isLoading: needsUrlResolution || isUploading,
           hasError: false,
-          isLoaded: !needsUrlResolution,
+          isLoaded: !needsUrlResolution && !isUploading,
         });
       } else {
         newStates.set(key, existing);
@@ -346,9 +347,9 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
       // Show placeholder only if loading or if there's an error after attempting to load
       const shouldShowPlaceholder = mediaState.isLoading || (isFailed && mediaState.isLoaded);
 
-      // Show actual content if not loading and no error, or if it's a blob URL (already loaded)
+      // Show actual content if not loading and no error
       const shouldShowContent =
-        !mediaState.isLoading && !isFailed && (mediaState.isLoaded || itemUrl.startsWith('blob:'));
+        !mediaState.isLoading && !isFailed && mediaState.isLoaded;
 
       return (
         <div
@@ -454,11 +455,11 @@ export default function MessageMediaGrid({ items }: MessageMediaGridProps) {
               const shouldShowPlaceholder =
                 mediaState.isLoading || (isFailed && mediaState.isLoaded);
 
-              // Show actual content if not loading and no error, or if it's a blob URL (already loaded)
+              // Show actual content if not loading and no error
               const shouldShowContent =
                 !mediaState.isLoading &&
                 !isFailed &&
-                (mediaState.isLoaded || itemUrl.startsWith('blob:'));
+                mediaState.isLoaded;
 
               return (
                 <>
