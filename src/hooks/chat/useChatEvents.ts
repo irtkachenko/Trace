@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import type { RealtimeChannel, User } from '@supabase/supabase-js';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -13,8 +13,8 @@ interface PresenceState {
 }
 
 /**
- * РҐСѓРє РґР»СЏ РїРѕРґС–Р№ С‡Р°С‚Сѓ (typing indicator) С‡РµСЂРµР· Presence.
- * РџС–РґРїРёСЃРєР° РЅР° РїРѕРІС–РґРѕРјР»РµРЅРЅСЏ С‚РµРїРµСЂ РІС–РґР±СѓРІР°С”С‚СЊСЃСЏ РіР»РѕР±Р°Р»СЊРЅРѕ РІ useChatsRealtime.
+ * Хук для подій чату (typing indicator) через Presence.
+ * Підписка на повідомлення тепер відбувається глобально в useChatsRealtime.
  */
 export function useChatEvents(chatId: string, user: User | null) {
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
@@ -79,7 +79,7 @@ export function useChatEvents(chatId: string, user: User | null) {
       channelRef.current = null;
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [chatId, handlePresenceSync]);
+  }, [chatId, handlePresenceSync, user?.id]);
 
   const setTyping = useCallback((typing: boolean) => {
     if (!channelRef.current) return;
