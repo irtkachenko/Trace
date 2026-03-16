@@ -49,12 +49,18 @@ export function useChatsRealtime(user: User | null) {
   useEffect(() => {
     if (!user?.id) return;
 
+    // Cleanup existing channel first
     if (channelRef.current) {
-      realtimeApi.unsubscribe(channelRef.current);
+      try {
+        realtimeApi.unsubscribe(channelRef.current);
+      } catch (error) {
+        console.warn('Error unsubscribing from existing channel:', error);
+      }
       channelRef.current = null;
     }
 
     const channel = realtimeApi.createMessagesChannel();
+    channelRef.current = channel;
 
     const handleInsert = (payload: RealtimeMessagePayload) => {
       if (!payload.new || typeof payload.new !== 'object' || !('id' in payload.new)) return;
@@ -186,8 +192,13 @@ export function useChatsRealtime(user: User | null) {
     channelRef.current = channel;
 
     return () => {
+      // Add null check and error handling for cleanup
       if (channelRef.current) {
-        realtimeApi.unsubscribe(channelRef.current);
+        try {
+          realtimeApi.unsubscribe(channelRef.current);
+        } catch (error) {
+          console.warn('Error during channel cleanup:', error);
+        }
         channelRef.current = null;
       }
     };

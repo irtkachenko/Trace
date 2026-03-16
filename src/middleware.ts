@@ -3,6 +3,11 @@ import { isStaticAsset } from '@/config/storage.config';
 import { createMiddlewareClient } from '@/lib/supabase/middleware';
 
 export async function middleware(request: NextRequest) {
+  // Skip middleware for API routes
+  if (request.nextUrl.pathname.startsWith('/api/')) {
+    return NextResponse.next();
+  }
+
   if (isStaticAsset(request.nextUrl.pathname)) {
     return NextResponse.next();
   }
@@ -50,6 +55,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!api|_next/static|_next/image|_next/data|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|_next/data|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };

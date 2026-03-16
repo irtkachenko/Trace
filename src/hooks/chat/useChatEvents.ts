@@ -21,6 +21,12 @@ export function useChatEvents(chatId: string, user: User | null) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSentRef = useRef<number>(0);
+  const userIdRef = useRef<string | null>(null);
+
+  // Update userId ref when user changes
+  useEffect(() => {
+    userIdRef.current = user?.id || null;
+  }, [user?.id]);
 
   const handlePresenceSync = useCallback(() => {
     if (!channelRef.current) return;
@@ -29,7 +35,7 @@ export function useChatEvents(chatId: string, user: User | null) {
 
     Object.values(state as unknown as PresenceState).forEach((presences) => {
       presences.forEach((p) => {
-        if (p.isTyping && p.user_id !== user?.id) {
+        if (p.isTyping && p.user_id !== userIdRef.current) {
           typing.add(p.user_id);
         }
       });
@@ -42,7 +48,7 @@ export function useChatEvents(chatId: string, user: User | null) {
       }
       return prev;
     });
-  }, [user?.id]);
+  }, []);
 
   useEffect(() => {
     if (!chatId || !user?.id) return;
@@ -56,18 +62,22 @@ export function useChatEvents(chatId: string, user: User | null) {
 
     channel.subscribe((status: string) => {
       if (status === 'SUBSCRIBED') {
-        channel.track({ user_id: user.id, isTyping: false });
+        channel.track({ user_id: userIdRef.current, isTyping: false });
       }
     });
 
     return () => {
       if (channel) {
-        realtimeApi.unsubscribe(channel);
+        try {
+          realtimeApi.unsubscribe(channel);
+        } catch (error) {
+          console.warn('Error during chat events cleanup:', error);
+        }
       }
       channelRef.current = null;
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, [chatId, user?.id, handlePresenceSync]);
+  }, [chatId, handlePresenceSync]);
 
   const setTyping = useCallback(
     (typing: boolean) => {
@@ -77,18 +87,18 @@ export function useChatEvents(chatId: string, user: User | null) {
       // Throttle: відправляємо статус кожні 2.5 секунди
       if (typing && now - lastSentRef.current < 2500) return;
 
-      channelRef.current.track({ user_id: user?.id, isTyping: typing });
+      channelRef.current.track({ user_id: userIdRef.current, isTyping: typing });
       if (typing) lastSentRef.current = now;
 
       // Автоматичне вимкнення статусу через 3 секунди бездіяльності
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       if (typing) {
         timeoutRef.current = setTimeout(() => {
-          channelRef.current?.track({ user_id: user?.id, isTyping: false });
+          channelRef.current?.track({ user_id: userIdRef.current, isTyping: false });
         }, 3000);
       }
     },
-    [user?.id],
+    [],
   );
 
   return { typingUsers, setTyping };

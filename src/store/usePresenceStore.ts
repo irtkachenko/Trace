@@ -71,6 +71,10 @@ function handleVisibilityChange(): void {
   }
 }
 
+function handleBeforeUnload(): void {
+  void updateLastSeen();
+}
+
 function updateActivity(manager: PresenceManager): void {
   manager.lastActivity = Date.now();
   
@@ -241,7 +245,7 @@ function getOrCreateManager(
 
   // Add global event listeners
   window.addEventListener('visibilitychange', handleVisibilityChange);
-  window.addEventListener('beforeunload', () => void updateLastSeen());
+  window.addEventListener('beforeunload', handleBeforeUnload);
 
   return globalManager;
 }
@@ -313,6 +317,7 @@ function cleanupPresence(): void {
 
   // Remove global event listeners
   window.removeEventListener('visibilitychange', handleVisibilityChange);
+  window.removeEventListener('beforeunload', handleBeforeUnload);
 
   // Reset global state
   globalManager = null;
