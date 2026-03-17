@@ -101,7 +101,7 @@ export default function ChatInput({
     if (onReplyCancel) onReplyCancel();
     if (onEditCancel) onEditCancel();
 
-    // Trigger immediate scroll for optimistic messages
+    // Trigger scroll
     if (onMessageSent) onMessageSent();
 
     try {
