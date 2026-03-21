@@ -93,7 +93,7 @@ function ChatListBase() {
           <Link
             href={`/chat/${chat.id}`}
             onClick={handleChatClick}
-            className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all border group ${
+            className={`flex items-center gap-3 mx-2 py-3 px-3 rounded-xl transition-all border group flex-1 ${
               isActiveChat
                 ? 'bg-white/10 border-white/20 shadow-lg'
                 : 'border-transparent hover:bg-white/5 hover:border-white/5'
@@ -124,7 +124,7 @@ function ChatListBase() {
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
-                <p className={`text-sm font-medium truncate transition-colors ${
+                <p className={`text-sm font-medium truncate transition-colors flex-1 min-w-0 ${
                   isActiveChat ? 'text-white' : 'text-gray-200 group-hover:text-white'
                 }`}>
                   {chatDisplayTitle}
@@ -239,7 +239,7 @@ function ChatListBase() {
           components={{
             Footer: renderFooter,
           }}
-          className="flex-1 px-2"
+          className="flex-1"
           style={{ height: '100%' }}
         />
       ) : null}

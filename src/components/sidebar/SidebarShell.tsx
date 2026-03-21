@@ -79,8 +79,8 @@ function SidebarShellBase() {
       <div className="flex-1 flex flex-col min-h-0 py-2 overflow-hidden">
         {tab === 'chats' ? (
           <>
-            <div className="px-6 mb-2">
-              <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-500 letter-spacing-wide">
+            <div className="mb-2">
+              <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-500 letter-spacing-wide px-4">
                 Ваші діалоги
               </h2>
             </div>

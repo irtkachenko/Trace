@@ -255,8 +255,8 @@ export default function ChatPage() {
             followOutput={false}
             alignToBottom
             atBottomThreshold={32}
-            overscan={280}
-            increaseViewportBy={{ bottom: 320, top: 220 }}
+            overscan={40}
+            increaseViewportBy={{ bottom: 80, top: 60 }}
             className="no-scrollbar"
             atBottomStateChange={(atBottom) => {
               setIsAtBottom(atBottom);

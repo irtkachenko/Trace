@@ -45,8 +45,11 @@ export function useMessages(chatId: string, isAtBottom: boolean) {
   // Get all messages in a flattened memoized format
   const allMessages = useMemo(() => query.data?.pages.flat() || [], [query.data?.pages]);
 
-  // Filter and deduplicate messages
+  // Filter and deduplicate messages with memory optimization
   const validMessages = useMemo(() => {
+    if (allMessages.length === 0) return [];
+
+    // 1. Quick filter invalid messages
     const filtered = allMessages.filter((msg) => {
       if (!msg?.id) return false;
 
@@ -60,42 +63,43 @@ export function useMessages(chatId: string, isAtBottom: boolean) {
       return true;
     });
 
-    // 2. Advanced deduplication by id AND client_id
+    // 2. Memory-efficient deduplication
     const idMap = new Map<string, Message>();
-    const clientMap = new Map<string, string>(); // client_id -> message_id
+    const clientMap = new Map<string, string>();
 
     for (const msg of filtered) {
-      // Check if we already have this message by client_id
+      // Check client_id conflicts
       if (msg.client_id) {
         const existingId = clientMap.get(msg.client_id);
         if (existingId) {
           const existingMsg = idMap.get(existingId);
-          // If existing is optimistic and current is real, replace it
+          // Replace optimistic with real message
           if (existingMsg?.is_optimistic && !msg.is_optimistic) {
             idMap.delete(existingId);
             idMap.set(msg.id, msg);
             clientMap.set(msg.client_id, msg.id);
             continue;
           } else if (!existingMsg?.is_optimistic && msg.is_optimistic) {
-            // Already have the real message, ignore the late optimistic update
+            // Skip late optimistic update
             continue;
           }
         }
         clientMap.set(msg.client_id, msg.id);
       }
 
-      // Standard ID-based deduplication
+      // Standard deduplication
       const existing = idMap.get(msg.id);
       if (!existing || (existing.is_optimistic && !msg.is_optimistic)) {
         idMap.set(msg.id, msg);
       }
     }
 
-    // Convert back to array while preserving temporal order if possible
-    // (Since we already filtered, sorting by created_at is safest)
-    return Array.from(idMap.values()).sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
-    );
+    // 3. Convert to array and sort only if necessary
+    const result = Array.from(idMap.values());
+    if (result.length > 1) {
+      result.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    }
+    return result;
   }, [allMessages]);
 
   // Initialize new read detection hooks

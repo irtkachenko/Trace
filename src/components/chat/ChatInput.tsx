@@ -207,6 +207,7 @@ export default function ChatInput({
               'w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2.5 text-sm text-white placeholder:text-gray-500',
               'focus:outline-none focus:border-blue-500/50 transition-all duration-300',
               'resize-none overflow-y-auto leading-relaxed',
+              'scrollbar-hide',
             )}
             style={{ minHeight: '44px' }}
           />
