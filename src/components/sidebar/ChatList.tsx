@@ -3,6 +3,7 @@
 import { MessageSquare, Trash2, User } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { memo, useMemo, useState } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
@@ -24,6 +25,7 @@ function ChatListBase() {
   const { user, loading: isAuthLoading } = useSupabaseAuth();
   const deleteChat = useDeleteChat();
   const [chatToDelete, setChatToDelete] = useState<string | null>(null);
+  const pathname = usePathname();
 
   const currentUserId = user?.id;
 
@@ -66,6 +68,9 @@ function ChatListBase() {
     const partner = chat.user_id === currentUserId ? chat.recipient : chat.user;
     const chatDisplayTitle = partner?.name || chat.title || 'Користувач Trace';
     const partnerImage = partner?.image;
+    
+    // Перевіряємо, чи є цей чат активним
+    const isActiveChat = pathname === `/chat/${chat.id}`;
 
     const lastMessage = chat.messages?.[0];
 
@@ -88,7 +93,11 @@ function ChatListBase() {
           <Link
             href={`/chat/${chat.id}`}
             onClick={handleChatClick}
-            className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-white/5 transition-all border border-transparent hover:border-white/5 group"
+            className={`flex items-center gap-3 px-3 py-3 rounded-xl transition-all border group ${
+              isActiveChat
+                ? 'bg-white/10 border-white/20 shadow-lg'
+                : 'border-transparent hover:bg-white/5 hover:border-white/5'
+            }`}
           >
             <div className="relative shrink-0">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-white/10 to-transparent flex items-center justify-center border border-white/10 overflow-hidden">
@@ -115,7 +124,9 @@ function ChatListBase() {
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-gray-200 truncate group-hover:text-white">
+                <p className={`text-sm font-medium truncate transition-colors ${
+                  isActiveChat ? 'text-white' : 'text-gray-200 group-hover:text-white'
+                }`}>
                   {chatDisplayTitle}
                 </p>
 
@@ -127,7 +138,9 @@ function ChatListBase() {
               </div>
 
               <div className="flex items-center justify-between gap-2 mt-0.5">
-                <p className="text-[11px] text-gray-500 truncate flex-1">
+                <p className={`text-[11px] truncate flex-1 transition-colors ${
+                  isActiveChat ? 'text-gray-300' : 'text-gray-500'
+                }`}>
                   {lastMessage?.sender_id === currentUserId && 'Ви: '}
                   {lastMessage?.content ||
                     (Array.isArray(lastMessage?.attachments) && lastMessage.attachments.length > 0
