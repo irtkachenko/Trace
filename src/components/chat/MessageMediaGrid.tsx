@@ -233,7 +233,7 @@ export default function MessageMediaGrid({ items, onMediaSettled }: MessageMedia
       const shouldShowPlaceholder = mediaState.isLoading || isFailed || item.uploading;
 
       // Показуємо контент тільки якщо немає помилок і завантаження завершено
-      const shouldShowContent = !shouldShowPlaceholder && (mediaState.isLoaded || item.url.startsWith('blob:'));
+      const shouldShowContent = !shouldShowPlaceholder;
 
       return (
         <div
@@ -340,7 +340,7 @@ export default function MessageMediaGrid({ items, onMediaSettled }: MessageMedia
 
               // Показуємо контент: або коли успішно завантажено, або якщо це blob (оптимістичний UI)
               // АЛЕ при завантаженні blob (uploading) ми не показуємо контент взагалі
-              const shouldShowContent = !shouldShowPlaceholder && (mediaState.isLoaded || item.url.startsWith('blob:'));
+              const shouldShowContent = !shouldShowPlaceholder;
 
               return (
                 <>
