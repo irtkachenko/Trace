@@ -19,6 +19,8 @@ import {
 } from '@/hooks/chat';
 import { usePresence } from '@/hooks/user';
 import { formatRelativeTime } from '@/lib/date-utils';
+import { extractStorageRef } from '@/lib/storage-utils';
+import { useStorageStore } from '@/store/useStorageStore';
 import type { Message, User } from '@/types';
 
 export default function ChatPage() {
@@ -32,6 +34,7 @@ export default function ChatPage() {
         : '';
   const router = useRouter();
   const { user, supabaseUser, loading: isAuthLoading } = useSupabaseAuth();
+  const clearStorageEntries = useStorageStore((state) => state.clearEntries);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
 
   const { data: chat, isLoading: isChatLoading, isError } = useChatDetails(id);
@@ -67,6 +70,7 @@ export default function ChatPage() {
   const prevMessagesRef = useRef<Message[]>([]);
   const initialScrollDoneRef = useRef(false);
   const pinToBottomUntilRef = useRef(0);
+  const clearedMediaForChatRef = useRef<string | null>(null);
 
   const getMessageKey = useCallback((message: Message) => message.client_id || message.id, []);
 
@@ -113,6 +117,35 @@ export default function ChatPage() {
     initialScrollDoneRef.current = false;
     pinToBottomUntilRef.current = 0;
   }, [id]);
+
+  // Refresh only current chat media cache when a chat opens/reloads.
+  useEffect(() => {
+    if (!id || isMessagesLoading) return;
+    if (clearedMediaForChatRef.current === id) return;
+
+    const keys = new Set<string>();
+    const urls = new Set<string>();
+
+    for (const message of messages) {
+      const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+
+      for (const attachment of attachments) {
+        const url = attachment?.url;
+        if (!url || typeof url !== 'string' || url.startsWith('blob:')) continue;
+
+        urls.add(url);
+        keys.add(`${attachment.id}:${url}`);
+
+        const storageRef = extractStorageRef(url);
+        if (storageRef) {
+          keys.add(`${storageRef.bucket}:${storageRef.path}`);
+        }
+      }
+    }
+
+    clearStorageEntries(Array.from(keys), Array.from(urls));
+    clearedMediaForChatRef.current = id;
+  }, [id, isMessagesLoading, messages, clearStorageEntries]);
 
   // Scroll rules:
   // - initial load -> jump to latest message

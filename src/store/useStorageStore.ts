@@ -24,6 +24,7 @@ interface StorageStore {
   setMediaState: (key: string, state: Partial<MediaState>) => void;
   addFailedUrl: (url: string) => void;
   removeFailedUrl: (url: string) => void;
+  clearEntries: (keys: string[], urls?: string[]) => void;
   clearCache: () => void;
 }
 
@@ -64,6 +65,30 @@ export const useStorageStore = create<StorageStore>((set) => ({
       const next = new Set(state.failedUrls);
       next.delete(url);
       return { failedUrls: next };
+    }),
+
+  clearEntries: (keys, urls = []) =>
+    set((state) => {
+      if (keys.length === 0 && urls.length === 0) return state;
+
+      const keySet = new Set(keys);
+      const urlSet = new Set(urls);
+
+      const nextUrlCache = Object.fromEntries(
+        Object.entries(state.urlCache).filter(([key]) => !keySet.has(key)),
+      );
+      const nextMediaStates = Object.fromEntries(
+        Object.entries(state.mediaStates).filter(([key]) => !keySet.has(key)),
+      );
+
+      const nextFailedUrls = new Set(state.failedUrls);
+      urlSet.forEach((url) => nextFailedUrls.delete(url));
+
+      return {
+        urlCache: nextUrlCache,
+        mediaStates: nextMediaStates,
+        failedUrls: nextFailedUrls,
+      };
     }),
 
   clearCache: () => set({ urlCache: {}, mediaStates: {}, failedUrls: new Set() }),

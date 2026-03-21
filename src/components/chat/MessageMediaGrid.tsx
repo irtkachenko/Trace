@@ -2,8 +2,8 @@
 
 import { FileX, ImageOff, PlayCircle } from 'lucide-react';
 import Image from 'next/image';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getUrlCheckInterval, getUrlExpiryBuffer, storageConfig } from '@/config/storage.config';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { storageConfig } from '@/config/storage.config';
 import { useStorageUrl } from '@/hooks/useStorageUrl';
 import { useStorageStore } from '@/store/useStorageStore';
 import { extractStorageRef } from '@/lib/storage-utils';
@@ -58,7 +58,6 @@ const MediaPlaceholder = ({
 
 export default function MessageMediaGrid({ items, onMediaSettled }: MessageMediaGridProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
-  const [refreshTick, setRefreshTick] = useState(0);
   
   // Zustand store
   const { 
@@ -135,19 +134,18 @@ export default function MessageMediaGrid({ items, onMediaSettled }: MessageMedia
     if (!items || items.length === 0) {
       return [];
     }
-    const now = refreshTick;
 
     return items.map((item) => {
       const cacheKey = `${item.id}:${item.url}`;
       const cached = urlCache[cacheKey];
 
-      if (cached && cached.expiresAt > now) {
+      if (cached) {
         return { ...item, processedUrl: cached.url };
       }
 
       return { ...item, processedUrl: item.url };
     });
-  }, [items, refreshTick, urlCache]);
+  }, [items, urlCache]);
 
   const handleImageError = useCallback((url: string) => {
     addFailedUrl(url);
