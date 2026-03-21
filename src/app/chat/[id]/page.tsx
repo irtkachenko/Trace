@@ -22,6 +22,7 @@ import { formatRelativeTime } from '@/lib/date-utils';
 import type { Message, User } from '@/types';
 
 export default function ChatPage() {
+  const SMART_SCROLL_NEAR_BOTTOM_ITEMS = 10;
   const params = useParams();
   const id =
     params.id && typeof params.id === 'string'
@@ -35,13 +36,15 @@ export default function ChatPage() {
 
   const { data: chat, isLoading: isChatLoading, isError } = useChatDetails(id);
   const [isAtBottom, setIsAtBottom] = useState(true);
+  const [isNearBottom, setIsNearBottom] = useState(true);
+  const isCloseToBottom = isAtBottom || isNearBottom;
   const {
     messages,
     isLoading: isMessagesLoading,
     fetchPreviousPage,
     hasPreviousPage,
     isFetchingPreviousPage,
-  } = useMessages(id, isAtBottom);
+  } = useMessages(id, isCloseToBottom);
 
   const { typingUsers, setTyping } = useChatEvents(id, supabaseUser);
   const { onlineUsers } = usePresence();
@@ -58,7 +61,7 @@ export default function ChatPage() {
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [messageToDelete, setMessageToDelete] = useState<string | null>(null);
-  const [showScrollButton, setShowScrollButton] = useState(false);
+  const showScrollButton = !isCloseToBottom;
   const [showLoader, setShowLoader] = useState(true);
   const isPageLoading = isAuthLoading || isChatLoading || isMessagesLoading;
   const prevMessagesRef = useRef<Message[]>([]);
@@ -114,7 +117,7 @@ export default function ChatPage() {
   // Scroll rules:
   // - initial load -> jump to latest message
   // - append from current user (optimistic or own message) -> smooth scroll
-  // - incoming append from another user -> no auto-scroll
+  // - incoming append from another user -> smart auto-scroll if we are near bottom
   // - edit/delete/prepend history -> no auto-scroll
   useEffect(() => {
     if (messages.length === 0) {
@@ -146,22 +149,35 @@ export default function ChatPage() {
 
         const hasOptimisticAppend = appendedMessages.some((m) => m.is_optimistic);
         const hasOwnAppend = appendedMessages.some((m) => !!m.sender_id && m.sender_id === user?.id);
+        const hasIncomingAppend = appendedMessages.some(
+          (m) => !!m.sender_id && m.sender_id !== user?.id && !m.is_optimistic,
+        );
 
         if (hasOptimisticAppend || hasOwnAppend) {
           scrollToBottom('smooth', 1800);
+        } else if (hasIncomingAppend && isCloseToBottom) {
+          scrollToBottom('smooth', 1200);
         }
       }
     }
 
     prevMessagesRef.current = messages;
-  }, [messages, isMessagesLoading, isChatLoading, scrollToBottom, getMessageKey, user?.id]);
+  }, [
+    messages,
+    isMessagesLoading,
+    isChatLoading,
+    scrollToBottom,
+    getMessageKey,
+    user?.id,
+    isCloseToBottom,
+  ]);
 
   const handleMessageMediaSettled = useCallback(() => {
-    const shouldKeepPinned = isAtBottom || Date.now() < pinToBottomUntilRef.current;
+    const shouldKeepPinned = isCloseToBottom || Date.now() < pinToBottomUntilRef.current;
     if (shouldKeepPinned) {
       virtuosoRef.current?.autoscrollToBottom();
     }
-  }, [isAtBottom]);
+  }, [isCloseToBottom]);
 
   // Interaction Handlers
   const handleReply = (message: Message) => {
@@ -188,6 +204,12 @@ export default function ChatPage() {
   }, [messages]);
 
   const otherParticipant = chat?.participants?.find((p: User) => p.id !== user?.id);
+  const otherParticipantReadId =
+    user?.id && chat
+      ? chat.user_id === user.id
+        ? chat.recipient_last_read_id
+        : chat.user_last_read_id
+      : null;
   const isOnline = otherParticipant && onlineUsers.has(otherParticipant.id);
   const isTypingNow = otherParticipant && typingUsers.has(otherParticipant.id);
 
@@ -254,13 +276,22 @@ export default function ChatPage() {
             initialTopMostItemIndex={{ index: 'LAST', align: 'end' }}
             followOutput={false}
             alignToBottom
-            atBottomThreshold={32}
+            atBottomThreshold={80}
             overscan={40}
             increaseViewportBy={{ bottom: 80, top: 60 }}
             className="no-scrollbar"
             atBottomStateChange={(atBottom) => {
               setIsAtBottom(atBottom);
-              setShowScrollButton(!atBottom);
+            }}
+            rangeChanged={(range) => {
+              const lastIndex = messages.length - 1;
+              if (lastIndex < 0) {
+                setIsNearBottom(true);
+                return;
+              }
+
+              const distanceToBottom = lastIndex - range.endIndex;
+              setIsNearBottom(distanceToBottom <= SMART_SCROLL_NEAR_BOTTOM_ITEMS);
             }}
             startReached={() => {
               if (hasPreviousPage && !isFetchingPreviousPage) {
@@ -270,14 +301,13 @@ export default function ChatPage() {
             itemContent={(_index, message) => {
               // O(1) пошук індексу повідомлення
               const currentMessageIndex = messageIndexMap.get(message.id);
-              const recipientLastReadId = chat?.recipient_last_read_id;
-              const recipientLastReadIndex = recipientLastReadId
-                ? messageIndexMap.get(recipientLastReadId)
+              const otherReadIndex = otherParticipantReadId
+                ? messageIndexMap.get(otherParticipantReadId)
                 : undefined;
               const isRead =
                 currentMessageIndex !== undefined &&
-                recipientLastReadIndex !== undefined &&
-                currentMessageIndex <= recipientLastReadIndex;
+                otherReadIndex !== undefined &&
+                currentMessageIndex <= otherReadIndex;
 
               return (
                 <div className="px-2 sm:px-6 lg:px-8 max-w-5xl mx-auto w-full py-0.5">
@@ -288,7 +318,7 @@ export default function ChatPage() {
                       // 1. Повідомлення відправив Я
                       message.sender_id === user?.id &&
                       // 2. У нас є ID прочитаного повідомлення від іншого користувача
-                      !!chat?.recipient_last_read_id &&
+                      !!otherParticipantReadId &&
                       // 3. O(1) порівняння індексів замість O(n) пошуку
                       isRead
                     }

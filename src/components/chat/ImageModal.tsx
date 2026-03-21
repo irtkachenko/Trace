@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, ChevronLeft, ChevronRight, Download, ImageOff, X } from 'lucide-react';
 import Image from 'next/image';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import type { Attachment } from '@/types';
@@ -20,6 +20,8 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [direction, setDirection] = useState(0);
   const [hasError, setHasError] = useState(false);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const SWIPE_THRESHOLD_PX = 45;
 
   // 1. Безпечне монтування для SSR (виправляє cascading renders)
   useEffect(() => {
@@ -69,6 +71,34 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
       }
     },
     [currentIndex],
+  );
+
+  const handleTouchStart = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  }, []);
+
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent<HTMLDivElement>) => {
+      if (!touchStartRef.current) return;
+      const touch = e.changedTouches[0];
+      if (!touch) return;
+
+      const dx = touch.clientX - touchStartRef.current.x;
+      const dy = touch.clientY - touchStartRef.current.y;
+      touchStartRef.current = null;
+
+      // Horizontal swipe only; ignore vertical drags.
+      if (Math.abs(dx) < SWIPE_THRESHOLD_PX || Math.abs(dx) <= Math.abs(dy)) return;
+
+      if (dx < 0) {
+        handleNext();
+      } else {
+        handlePrev();
+      }
+    },
+    [handleNext, handlePrev],
   );
 
   // 3. Обробка клавіш та блокування скролу
@@ -160,7 +190,11 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
           </div>
 
           {/* Main Content */}
-          <div className="relative flex-1 flex items-center justify-center p-4">
+          <div
+            className="relative flex-1 flex items-center justify-center p-4"
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
             {currentIndex > 0 && (
               <button
                 type="button"

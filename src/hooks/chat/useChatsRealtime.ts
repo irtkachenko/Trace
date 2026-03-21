@@ -128,6 +128,32 @@ export function useChatsRealtime(user: User | null) {
       }
     };
 
+    const findChatIdByMessageId = (messageId: string): string | null => {
+      const chatsData = queryClient.getQueryData<InfiniteData<FullChat[]>>(['chats']);
+      const fromChats = chatsData?.pages
+        .flat()
+        .find((chat) => chat.messages?.some((msg) => msg.id === messageId))?.id;
+
+      if (fromChats) return fromChats;
+
+      const messageQueries = queryClient.getQueriesData<InfiniteData<Message[]>>({
+        queryKey: ['messages'],
+      });
+
+      for (const [queryKey, queryData] of messageQueries) {
+        if (!Array.isArray(queryKey) || queryKey[0] !== 'messages') continue;
+        const candidateChatId = queryKey[1];
+        if (typeof candidateChatId !== 'string') continue;
+
+        const hasMessage = queryData?.pages.some((page) =>
+          page.some((message) => message.id === messageId),
+        );
+        if (hasMessage) return candidateChatId;
+      }
+
+      return null;
+    };
+
     const handleMessageInsert = async (payload: RealtimeMessagePayload) => {
       if (!payload.new || typeof payload.new !== 'object' || !('id' in payload.new)) return;
 
@@ -251,28 +277,38 @@ export function useChatsRealtime(user: User | null) {
       if (!payload.old || typeof payload.old !== 'object' || !('id' in payload.old)) return;
 
       const deletedId = payload.old.id as string;
-      const deletedChatId = payload.old.chat_id as string;
-      if (!deletedId || !deletedChatId) return;
+      if (!deletedId) return;
 
-      queryClient.setQueryData(['chats'], (old: InfiniteData<FullChat[]> | undefined) =>
-        updateChatMessageIfMatches(
-          old,
-          deletedChatId,
-          (last) => last?.id === deletedId,
-          (chat) => ({
-            ...chat,
-            messages: chat.messages?.filter((m) => m.id !== deletedId) || [],
-          }),
-        ),
-      );
+      const deletedChatId =
+        (payload.old.chat_id as string | undefined) || findChatIdByMessageId(deletedId);
 
-      queryClient.setQueryData<InfiniteData<Message[]>>(['messages', deletedChatId], (old) => {
-        if (!old) return old;
-        return {
-          ...old,
-          pages: old.pages.map((page: Message[]) => page.filter((m) => m.id !== deletedId)),
-        };
+      if (deletedChatId) {
+        queryClient.setQueryData(['chats'], (old: InfiniteData<FullChat[]> | undefined) =>
+          updateChatMessageIfMatches(
+            old,
+            deletedChatId,
+            (last) => last?.id === deletedId,
+            (chat) => ({
+              ...chat,
+              messages: chat.messages?.filter((m) => m.id !== deletedId) || [],
+            }),
+          ),
+        );
+      }
+
+      const messageQueries = queryClient.getQueriesData<InfiniteData<Message[]>>({
+        queryKey: ['messages'],
       });
+
+      for (const [queryKey] of messageQueries) {
+        queryClient.setQueryData<InfiniteData<Message[]>>(queryKey, (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page: Message[]) => page.filter((m) => m.id !== deletedId)),
+          };
+        });
+      }
     };
 
     const handleChatInsert = (payload: RealtimeChatPayload) => {

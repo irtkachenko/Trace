@@ -13,7 +13,7 @@ import { useMarkAsRead } from './useMarkAsRead';
 /**
  * Hook for fetching and managing chat messages with infinite scroll and auto-read logic.
  */
-export function useMessages(chatId: string, isAtBottom: boolean) {
+export function useMessages(chatId: string, isCloseToBottom: boolean) {
   const { user } = useSupabaseAuth();
   const { mutate: markAsRead } = useMarkAsRead();
   const readTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
@@ -123,7 +123,8 @@ export function useMessages(chatId: string, isAtBottom: boolean) {
     if (validMessages.length === 0 || !user?.id) return;
 
     // If the chat isn't in an active reading state, clear pending timers
-    const chatIsActive = isChatOpen && isWindowFocused && isDocumentVisible && isAtBottom;
+    const chatIsActive =
+      isChatOpen && isWindowFocused && isDocumentVisible && isCloseToBottom;
     if (!chatIsActive) {
       readTimersRef.current.forEach((timer, messageId) => {
         clearTimeout(timer);
@@ -133,7 +134,7 @@ export function useMessages(chatId: string, isAtBottom: boolean) {
       return;
     }
 
-    // When chat is active and pinned to bottom, the newest incoming message is visible enough.
+    // When chat is active and close to bottom, the newest incoming message is visible enough.
     const incomingMessages = validMessages.filter((m) => m.sender_id !== user.id);
 
     if (incomingMessages.length === 0) return;
@@ -159,7 +160,7 @@ export function useMessages(chatId: string, isAtBottom: boolean) {
 
       const timer = setTimeout(() => {
         const stillEligible =
-          isAtBottom &&
+          isCloseToBottom &&
           isChatOpen &&
           isWindowFocused &&
           isDocumentVisible;
@@ -180,7 +181,7 @@ export function useMessages(chatId: string, isAtBottom: boolean) {
     user?.id,
     chatId,
     markAsRead,
-    isAtBottom,
+    isCloseToBottom,
     isWindowFocused,
     isDocumentVisible,
     isViewedLongEnough,

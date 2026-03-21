@@ -2,7 +2,7 @@
 
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { Paperclip, Send } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { useEditMessage } from '@/hooks/chat';
@@ -43,42 +43,29 @@ export default function ChatInput({
   const sendMessageWithFiles = useSendMessageWithFiles(chatId);
   const editMessage = useEditMessage(chatId);
 
-  // Оновлення контенту при редагуванні та фокус
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
+
   useEffect(() => {
-    if (editingMessage) {
-      setContent(editingMessage.content || '');
-      setTimeout(() => textareaRef.current?.focus(), 50);
-    } else {
-      setContent('');
-    }
+    const timer = setTimeout(() => {
+      if (editingMessage) {
+        setContent(editingMessage.content || '');
+        textareaRef.current?.focus();
+      } else {
+        setContent('');
+      }
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, [editingMessage]);
 
-  // Фокус при реплаї
   useEffect(() => {
     if (replyToId) {
       setTimeout(() => textareaRef.current?.focus(), 50);
     }
   }, [replyToId]);
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const queryClient = useQueryClient();
-
-  // Автоматична висота textarea
-  const adjustTextareaHeight = useCallback(() => {
-    const textarea = textareaRef.current;
-    if (textarea) {
-      textarea.style.height = 'inherit';
-      const scrollHeight = textarea.scrollHeight;
-      textarea.style.height = `${Math.min(scrollHeight, 200)}px`;
-    }
-  }, []);
-
-  useEffect(() => {
-    adjustTextareaHeight();
-  }, [adjustTextareaHeight]);
-
-  // Знаходимо повідомлення для реплаю в кеші
   const replyToMessage = !replyToId
     ? null
     : queryClient
@@ -111,7 +98,7 @@ export default function ChatInput({
       } else {
         const filesToSend = attachments.map((a) => a.file);
 
-        // Clear input immediately for snappy UX on optimistic append
+        // Clear input immediately for snappy UX on optimistic append.
         setContent('');
         setTyping(false);
         clearAttachments();
@@ -127,7 +114,7 @@ export default function ChatInput({
           client_id: clientId,
         });
       }
-    } catch (_error) {
+    } catch {
       handleError(
         new NetworkError('Failed to process message', 'message', 'MESSAGE_PROCESS_ERROR', 500),
         'ChatInput',
