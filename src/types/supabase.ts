@@ -319,6 +319,16 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      search_users: {
+        Args: { p_query: string }
+        Returns: {
+          email: string
+          id: string
+          image: string
+          last_seen: string
+          name: string
+        }[]
+      }
       update_last_seen: { Args: never; Returns: undefined }
     }
     Enums: {

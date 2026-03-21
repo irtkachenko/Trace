@@ -36,7 +36,7 @@ function SearchInputBase() {
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Пошук контактів..."
+        placeholder="Пошук за email адресою..."
         className="w-full bg-white/5 border border-white/5 rounded-xl py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-white/20 transition-all duration-300 placeholder:text-gray-500"
       />
     </div>

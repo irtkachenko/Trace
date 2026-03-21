@@ -16,6 +16,6 @@ export function useSearchUsers(queryText: string) {
       if (!currentUser?.id) return [];
       return await contactsApi.searchUsers(currentUser.id, queryText);
     },
-    enabled: !!currentUser?.id && (queryText.trim().length === 0 || queryText.trim().length > 1),
+    enabled: !!currentUser?.id && queryText.trim().length > 1,
   });
 }

@@ -31,7 +31,7 @@ function ContactsListBase({ query }: ContactsListProps) {
         <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-3">
           <UserIcon className="w-6 h-6 text-gray-400" />
         </div>
-        <p className="text-sm text-gray-500">Введіть принаймні 2 символи для пошуку</p>
+        <p className="text-sm text-gray-500">Введіть email адресу для пошуку</p>
       </div>
     );
   }
@@ -43,7 +43,7 @@ function ContactsListBase({ query }: ContactsListProps) {
           <UserIcon className="w-6 h-6 text-gray-600" />
         </div>
         <p className="text-sm text-gray-500">
-          {query ? 'Нічого не знайдено' : 'У вас ще немає активних діалогів'}
+          {query ? 'Нічого не знайдено' : 'Введіть email адресу для пошуку'}
         </p>
       </div>
     );
@@ -53,7 +53,7 @@ function ContactsListBase({ query }: ContactsListProps) {
     <div className="flex-1 overflow-y-auto px-2 space-y-1">
       <div className="px-4 mb-2">
         <h2 className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
-          {query ? 'Результати пошуку' : 'Ваші контакти'}
+          Контакти
         </h2>
       </div>
       {users.map((user) => (
