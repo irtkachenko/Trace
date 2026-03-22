@@ -24,7 +24,7 @@ export async function handleSignOut() {
   // Update status before sign out
   try {
     await supabase.rpc('update_last_seen');
-  } catch (e) {
+  } catch {
     handleError(
       new DatabaseError(
         'Failed to update last seen on sign out',

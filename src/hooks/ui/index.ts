@@ -2,5 +2,4 @@
 
 export * from './useChatState';
 export * from './useMessageViewTimer';
-export * from './useScrollPosition';
 export * from './useViewportDetection';

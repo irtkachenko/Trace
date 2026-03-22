@@ -103,7 +103,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
         } else {
           handleAuthStateChange('INITIAL_SESSION', user ? ({ user } as Session) : null);
         }
-      } catch (_error) {
+      } catch {
         handleError(
           new DatabaseError('Error during auth initialization', 'authInit', 'AUTH_INIT_ERROR', 500),
           'AuthProvider',

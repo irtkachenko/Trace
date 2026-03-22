@@ -1,7 +1,6 @@
 'use client';
 
 import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
 import { useSupabaseAuth } from '@/components/auth/AuthProvider';
 import { messagesApi } from '@/services';
 import { handleError } from '@/shared/lib/error-handler';
@@ -20,7 +19,6 @@ export function useSendMessage(chatId: string) {
       content,
       reply_to_id,
       attachments,
-      _tempId,
     }: {
       content: string;
       reply_to_id?: string;

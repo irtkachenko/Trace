@@ -1,6 +1,6 @@
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { getUploadAllowedExtensions, storageConfig } from '@/config/storage.config';
+import { getUploadAllowedMimeTypes, storageConfig } from '@/config/storage.config';
 import { createClient } from '@/lib/supabase/server';
 
 export async function GET() {
@@ -26,7 +26,7 @@ export async function GET() {
         ],
         limits: {
           maxFileSize: String(storageConfig.defaults.maxFileSize),
-          allowedTypes: getUploadAllowedExtensions(),
+          allowedTypes: getUploadAllowedMimeTypes(),
           signedUrlExpiry: storageConfig.defaults.signedUrlExpiry,
         },
       });
@@ -45,7 +45,7 @@ export async function GET() {
         allowedTypes:
           Array.isArray(bucket.allowed_mime_types) && bucket.allowed_mime_types.length > 0
             ? bucket.allowed_mime_types
-            : getUploadAllowedExtensions(),
+            : getUploadAllowedMimeTypes(),
         signedUrlExpiry: storageConfig.defaults.signedUrlExpiry,
       },
     };

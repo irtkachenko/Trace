@@ -1,23 +1,31 @@
-# Використовуємо офіційний образ Node.js
-FROM node:22-alpine
-
-# Встановлюємо конкретну версію pnpm, як у твоєму package.json
+﻿FROM node:22-alpine AS base
 RUN npm install -g pnpm@10.28.1
-
-# Встановлюємо робочу директорію всередині контейнера
 WORKDIR /app
 
-# Копіюємо файли конфігурації
+FROM base AS deps
 COPY package.json pnpm-lock.yaml .npmrc ./
-
-# Встановлюємо залежності (використовуємо frozen-lockfile згідно з док)
 RUN pnpm install --frozen-lockfile
 
-# Копіюємо весь інший код проекту
+FROM base AS builder
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN pnpm build
 
-# Відкриваємо порт для Next.js
+FROM node:22-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nextjs -u 1001
+
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+
+USER nextjs
 EXPOSE 3000
+ENV PORT=3000
 
-# Запускаємо проект у дев-режимі
-CMD ["pnpm", "dev"]
+CMD ["node", "server.js"]

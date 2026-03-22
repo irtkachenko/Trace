@@ -50,7 +50,7 @@ export default async function middleware(request: NextRequest) {
       cookies.forEach((c) => redirectResponse.cookies.set(c.name, c.value, c));
       return redirectResponse;
     }
-  } catch (_error) {
+  } catch {
     if (request.nextUrl.pathname !== '/' && !request.nextUrl.pathname.startsWith('/auth')) {
       return NextResponse.redirect(new URL('/', request.url));
     }

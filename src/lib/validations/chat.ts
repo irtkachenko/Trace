@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import type { Attachment } from '@/types';
 
 /**
  * Validation schemas for chat-related operations

@@ -194,7 +194,7 @@ export function useOptimisticAttachmentLazy() {
   };
 
   const getOptimisticAttachments = (): Attachment[] => {
-    return attachments.map(({ file, previewUrl, ...attachment }) => ({
+    return attachments.map(({ previewUrl, ...attachment }) => ({
       ...attachment,
       url: previewUrl,
       uploading: false, // Will be set to true when sending

@@ -27,7 +27,7 @@ export interface StorageConfig {
   bucketNames: {
     attachments: string;
   };
-  // Allowed file extensions for uploads (without dot)
+  // Allowed MIME types for uploads
   uploadAllowedExtensions: string[];
   // Static asset extensions for middleware exclusion
   staticAssetExtensions: string[];
@@ -78,14 +78,17 @@ export const storageConfig: StorageConfig = {
 
 // Helper functions for working with storage config
 
-// Helper functions for working with storage config
-
 export function getBucketName(bucketKey: keyof StorageConfig['bucketNames']): string {
   return storageConfig.bucketNames[bucketKey];
 }
 
-export function getUploadAllowedExtensions(): string[] {
+export function getUploadAllowedMimeTypes(): string[] {
   return storageConfig.uploadAllowedExtensions;
+}
+
+// Backward-compatible alias. Prefer `getUploadAllowedMimeTypes`.
+export function getUploadAllowedExtensions(): string[] {
+  return getUploadAllowedMimeTypes();
 }
 
 export function isStaticAsset(pathname: string): boolean {

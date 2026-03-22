@@ -2,7 +2,7 @@
 
 import { type InfiniteData, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase/client';
+import { messagesApi } from '@/services';
 import { handleError } from '@/shared/lib/error-handler';
 import { NetworkError } from '@/shared/lib/errors';
 import type { Message } from '@/types';
@@ -15,21 +15,7 @@ export function useEditMessage(chatId: string) {
 
   return useMutation({
     mutationFn: async ({ messageId, content }: { messageId: string; content: string }) => {
-      const { data, error } = await supabase
-        .from('messages')
-        .update({ content, updated_at: new Date().toISOString() })
-        .eq('id', messageId)
-        .select('*, reply_to:reply_to_id(*)')
-        .single();
-
-      if (error)
-        throw new NetworkError(
-          error.message,
-          'messages',
-          'EDIT_MESSAGE_ERROR',
-          error.status || 500,
-        );
-      return data;
+      return await messagesApi.editMessage(messageId, content);
     },
     onMutate: async (newEdit) => {
       await queryClient.cancelQueries({ queryKey: ['messages', chatId] });

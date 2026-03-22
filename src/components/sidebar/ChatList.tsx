@@ -30,7 +30,7 @@ function ChatListBase() {
   const currentUserId = user?.id;
 
   // Об'єднуємо всі сторінки в один масив
-  const chats = data?.pages.flat() || [];
+  const chats = useMemo(() => data?.pages.flat() || [], [data?.pages]);
   const isBootstrapping = isAuthLoading || (!user && !data);
   const showInitialLoader = isBootstrapping || (isLoading && chats.length === 0);
 

@@ -117,7 +117,7 @@ export default function MessageMediaGrid({ items, onMediaSettled }: MessageMedia
           hasError: false, 
           isLoaded: true 
         }));
-      } catch (error) {
+      } catch {
         addFailedUrl(originalUrl);
         setLocalMediaStates(prev => new Map(prev).set(cacheKey, { 
           isLoading: false, 

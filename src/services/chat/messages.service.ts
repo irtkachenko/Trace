@@ -86,7 +86,7 @@ export const messagesApi = {
   /**
    * Delete a message
    */
-  deleteMessage: async (messageId: string, _chatId: string) => {
+  deleteMessage: async (messageId: string) => {
     const { data, error } = await supabase.rpc('rpc_delete_message', {
       p_message_id: messageId,
     });

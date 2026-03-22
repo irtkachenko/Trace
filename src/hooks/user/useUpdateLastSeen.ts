@@ -17,7 +17,7 @@ export function useUpdateLastSeen() {
       if (!user) return;
       return await userApi.updateLastSeen();
     },
-    onError: (error) => {
+    onError: () => {
       handleError(
         new NetworkError(
           'Presence status update error',

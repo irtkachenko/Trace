@@ -1,136 +1,224 @@
-﻿# Технічний аудит проєкту Trace
+﻿# Technical Audit — Trace
 
-Дата аудиту: 2026-03-16
+Date: 2026-03-22
+Auditor: Codex (GPT-5)
 
-## 1) Короткий висновок
-Проєкт має добре структуровану фронтенд‑архітектуру (Next.js App Router + Supabase + React Query + Zustand) і охайні практики обробки помилок. Водночас є кілька критичних/високих ризиків у безпеці та даних (SQL‑RPC з `security definer`, міграції для `storage.objects`, можливі секрети у `.env.local`), а також суттєві проблеми якості текстових ресурсів (помітні артефакти кодування у багатьох файлах). Також відсутні тести та CI, є неузгодженості у версіях/документації, і потенційні перформанс‑тривоги в real‑time/Presence частині.
+## Follow-up Status (2026-03-22)
 
-## 2) Область і методологія
-Огляд виконаний як статичний аудит:
-- Аналіз структури репозиторію та конфігурацій.
-- Ручний перегляд ключових модулів (auth, realtime, storage, middleware, API routes, DB міграції).
-- Без запуску тестів/лінтування/збірки.
+Implemented after the initial audit:
+- Fixed lint-blocking issues in `ImageModal` (no ESLint errors remain).
+- Hardened user search path:
+  - client-side sanitization via `sanitizeSearchQuery`
+  - new DB migration `supabase/migrations/20260322123000_harden_search_users.sql`
+  - wildcard-only query blocking and search rate limiting (`users_search`)
 
-## 3) Архітектура та стек
-**Фронтенд**
-- Next.js (App Router), React 19, TypeScript.
-- React Query для серверного стану.
-- Zustand для Presence.
-- Tailwind CSS 4, Radix UI, Framer Motion.
+Still open:
+- Dependency advisories for `next@16.1.6` remain. Attempted upgrade to `>=16.1.7`,
+  but registry in this environment currently reports `16.1.6` as latest stable.
 
-**Бекенд/дані**
-- Supabase (PostgreSQL, Auth, Storage, Realtime).
-- Використання `@supabase/ssr` для клієнта/сервера.
+## 1. Scope and Method
 
-**Інфраструктура**
-- Docker dev‑контейнер.
-- Supabase CLI (міграції/типи).
+Audit includes static code review and executable checks for:
+- Code style and lint discipline
+- TypeScript typing correctness
+- Security (app code, DB/RLS/RPC, dependencies)
+- Performance and runtime behavior
+- Maintainability and operational readiness
 
-## 4) Ключові знахідки (за пріоритетом)
+Executed checks:
+- `pnpm lint` -> failed (`2` errors, `27` warnings)
+- `pnpm exec tsc --noEmit` -> passed
+- `pnpm build` -> passed (after allowing network for Google Fonts)
+- `pnpm audit --prod` -> failed with known `next` vulnerabilities (`5` advisories)
 
-### Критичні
-1. **Можливе обходження RLS у RPC‑функціях (security definer)**
-   - Функції `rpc_send_message`, `rpc_create_chat` і частково `rpc_edit_message`/`rpc_delete_message` створені як `security definer`.
-   - Якщо власник функцій має `bypassrls`, RLS може не застосовуватись. У такому разі доступ контролюється лише логікою всередині функції.
-   - У `rpc_send_message` і `rpc_create_chat` **немає явної перевірки** членства користувача у чаті/існування recipient у `users`.
-   - Ризик: користувач може створювати чати/повідомлення у сторонніх чатах при некоректній конфігурації ролей.
-   - Рекомендація: або перейти на `SECURITY INVOKER`, або додати явні перевірки членства в кожну RPC (і/або примусово `set row_security = on`).
-   - Файли: `supabase/migrations/20260316090000_rate_limits_and_client_id.sql`.
+Repository shape at audit time:
+- `src/` files: `111`
+- `src/components/`: `30`
+- `src/hooks/`: `31`
+- `src/services/`: `12`
+- Supabase migrations: `10`
 
-2. **Міграції для `storage.objects` можуть падати на hosted Supabase**
-   - У міграції `20260315000000_rls_policies.sql` створення політик на `storage.objects` без захисту `DO $$ ... EXCEPTION ...`.
-   - На hosted Supabase це часто завершується помилкою “must be owner of table objects”.
-   - Результат: міграція може зупинити весь пайплайн.
-   - Рекомендація: винести створення цих політик у окремий скрипт для ручного застосування або обгорнути у `DO $$` з `EXCEPTION` як у пізнішій міграції.
+## 2. Executive Summary
 
-### Високі
-3. **Секрети/ключі у `.env.local` присутні у робочій копії**
-   - Файл `.env.local` містить реальні значення Supabase URL та anon‑key.
-   - Anon‑key формально публічний, але на практиці все одно небажано комітити `.env.local`.
-   - Коментарі про Google OAuth ключі також можуть випадково потрапити в репозиторій.
-   - Рекомендація: переконатися, що `.env.local` не відслідковується git, прибрати з історії при потребі, зберігати лише `.env.example`.
+Project architecture is generally solid: clear separation between UI/hooks/services, React Query for server state, Zustand for shared realtime/storage state, and DB-level controls via Supabase RLS + RPC.
 
-4. **Артефакти кодування (UTF‑8/CP1251) по всьому репозиторію**
-   - README, Dockerfile, UI‑рядки, коментарі, `.env.example` містять “ламані” символи.
-   - Це може впливати на UX, документацію і підтримку.
-   - Рекомендація: уніфікувати кодування до UTF‑8 і прогнати перекодування файлів.
-   - Файли: `README.md`, `Dockerfile`, `src/components/GlobalErrorBoundary.tsx`, `src/components/Providers.tsx`, `src/app/chat/[id]/page.tsx`, `.env.example`, `scripts/*.mjs`, інші.
+Main blockers before production hardening:
+1. Vulnerable `next` version (`16.1.6`) with published security advisories.
+2. Lint-blocking logic errors in `ImageModal` (hooks/state-in-effect rules).
+3. Search RPC can be abused for broad user enumeration (`SECURITY DEFINER` + unescaped `ILIKE`).
+4. Upload validation contract is inconsistent and can reject all uploads during config fetch failures.
+5. Message mutation logic is split between RPC and direct table updates, weakening backend invariants over time.
 
-### Середні
-5. **Можлива проблема порядку міграцій для `updated_at`**
-   - `messages_updated_at_trigger` створюється раніше, ніж додається `chats.updated_at`.
-   - Якщо колонка не існувала раніше, створення функції/тригера може зламатися.
-   - Рекомендація: або переставити міграції, або додати `add column if not exists` перед створенням функції.
+## 3. Findings by Severity
 
-6. **Накопичення таблиці `rate_limits` без GC**
-   - Таблиця росте без очищення. Це може повільнити `check_action_limit`.
-   - Рекомендація: додати scheduled job (Supabase cron/edge function) для видалення старих вікон.
+## Critical
 
-7. **Неповна узгодженість версій у документації**
-   - README говорить про Next.js 15, але `package.json` містить Next 16.1.6.
-   - Рекомендація: синхронізувати документацію з фактичними версіями.
+### C1. Framework dependency vulnerabilities (`next` < `16.1.7`)
+- Evidence:
+  - `package.json:38` -> `"next": "^16.1.6"`
+  - `pnpm audit --prod` reports 5 advisories (4 moderate, 1 low), all fixed in `>=16.1.7`
+- Impact:
+  - Exposes application to known upstream issues (request smuggling, DoS vectors, CSRF bypass conditions in specific contexts).
+- Recommendation:
+  - Upgrade `next` and `eslint-config-next` to `16.1.7+` and rerun `pnpm build`, `pnpm lint`, `pnpm audit --prod`.
 
-8. **Відсутні автоматичні тести та CI**
-   - У репозиторії немає тестової інфраструктури або CI‑конфігурації.
-   - Рекомендація: додати базові e2e/інтеграційні тести та pipeline (GitHub Actions).
+### C2. Lint-blocking hooks correctness issue in image modal
+- Evidence:
+  - `src/components/chat/ImageModal.tsx:39` -> synchronous state update inside effect
+  - `src/components/chat/ImageModal.tsx:125` + `:131` -> conditional hook call path (`useMemo` after early return)
+  - Confirmed by `pnpm lint` failure
+- Impact:
+  - Risk of unstable rendering behavior and regressions under React Compiler/hook rules.
+  - CI/release gates fail when lint is required.
+- Recommendation:
+  - Refactor state sync to derived state or keyed remount strategy.
+  - Ensure all hooks are declared before any conditional early returns.
 
-### Низькі
-9. **Неприбрані/неоднозначні lint‑disable**
-   - Є `eslint-disable` для React Compiler або set‑state‑in‑effect.
-   - Це може приховувати регресії.
-   - Рекомендація: ізолювати ці випадки, задокументувати причини, по можливості рефакторити.
+## High
 
-10. **Мінорні дублікати/неточності**
-   - Подвійний коментар у `storage.config.ts`.
-   - Невикористаний імпорт `toast` у `lib/supabase/client.ts`.
+### H1. User-search RPC enables broad email enumeration patterns
+- Evidence:
+  - `supabase/migrations/20260321154500_fix_users_search_policy.sql:23` -> `SECURITY DEFINER`
+  - `...:43` -> `u.email ILIKE '%' || trim(p_query) || '%'`
+  - `...:49` -> execute granted to authenticated users
+  - Client sends raw trimmed query: `src/services/contacts/contacts.service.ts:16`
+- Impact:
+  - `%`/`_` wildcard probes can enumerate users faster than intended.
+  - Function bypasses table-RLS intent by design (definer privileges).
+- Recommendation:
+  - Escape `%`/`_` (`sanitizeSearchQuery` exists but is not used).
+  - Add server-side guardrails (rate limit, min entropy, prefix-only search, stricter result caps).
+  - Consider `SECURITY INVOKER` + policy-driven access if feasible.
 
-## 5) Безпека
-- **Auth‑шар:** Next middleware коректно захищає приватні маршрути (`/chat`) та публічні (`/auth`), але ці перевірки — це UI‑рівень, не заміна RLS.
-- **RLS:** політики сформовані грамотно, але важливо перевірити, чи `security definer` RPC не обходить їх.
-- **Storage:** правила `storage.objects` — сильні, але застосування в hosted середовищі проблемне (див. критичні знахідки).
-- **Secrets:** `.env.local` має не потрапляти у git.
+### H2. Upload validation contract mismatch and fail-closed UX path
+- Evidence:
+  - `src/config/storage.config.ts:47` defines MIME list in `uploadAllowedExtensions`
+  - `src/utils/file-validation.ts:4-9` validates by filename extension against that MIME list
+  - `src/hooks/useDynamicStorageConfig.ts:99-100` returns invalid when config is unavailable (`Service temporarily unavailable`)
+- Impact:
+  - Validation utility can produce false negatives due to MIME-vs-extension mismatch.
+  - Temporary API/storage config failure blocks all uploads client-side.
+- Recommendation:
+  - Rename config field to `allowedMimeTypes` and align all validators.
+  - Provide resilient fallback policy for offline/config-failure mode.
 
-## 6) Продуктивність і real‑time
-- Presence менеджер продуманий (debounce + heartbeat + cleanup), але:
-  - “last seen” викликається у `beforeunload`/`visibilitychange`; браузер може не завершити запит. Для підвищення надійності можна додати `navigator.sendBeacon`.
-  - Реконект з експоненційним backoff є, але немає випадкового jitter (можливий «thundering herd» при масових reconnect).
-- `React.Profiler` у dev‑режимі — хороший інструмент, але вимагає перевірки на “зайвий шум” у dev UX.
+### H3. Mutation path inconsistency (RPC vs direct table writes)
+- Evidence:
+  - Service RPC methods exist: `src/services/chat/messages.service.ts:90`, `:130`
+  - UI hooks bypass RPC and write directly:
+    - `src/hooks/chat/useDeleteMessage.ts:19-20`
+    - `src/hooks/chat/useEditMessage.ts:19-20`
+- Impact:
+  - Business rules can drift when logic is split across DB RPC and client table mutations.
+  - Future server-side controls added to RPC may be silently bypassed by direct writes.
+- Recommendation:
+  - Standardize one write path for message mutations (prefer RPC for invariant-heavy operations).
+  - Remove dead/unused mutation functions to avoid accidental divergence.
 
-## 7) Дані та БД
-- Політики RLS на `users/chats/messages` покривають основні сценарії.
-- RPC‑функції реалізують rate‑limit та логику критичних операцій.
-- Ризик: `security definer` + відсутність явної перевірки членства в RPC (див. критичні).
-- Рекомендується також додати індекси на `messages.chat_id`, `messages.created_at`, `chats.user_id/recipient_id`, якщо їх ще немає у схемі.
+## Medium
 
-## 8) DX та підтримка
-- Відсутній `engines` у `package.json`, але `engine-strict=true` у `.npmrc`. Це може викликати неочікувані відмови встановлення.
-- Рекомендація: додати `engines` (Node + pnpm), або вимкнути strict‑режим.
-- Документація має кодування з проблемами, потрібна чистка.
+### M1. `MessageMediaGrid` has race-prone async effect and expensive state churn
+- Evidence:
+  - `src/components/chat/MessageMediaGrid.tsx:83` -> `forEach(async ...)` inside effect without cancellation control
+  - Repeated map cloning and key scans: `:100`, `:115`, `:122`, `:154`, `:165`, `:177`
+- Impact:
+  - Potential stale updates after unmount/prop change.
+  - Extra CPU work under large media batches, leading to jank on weaker devices.
+- Recommendation:
+  - Use `Promise.allSettled` with abort/cancel guards.
+  - Move per-item media state updates to keyed reducer or batched writes.
 
-## 9) Ризики релізу
-Перед production‑запуском необхідно:
-- Переконатися, що RLS не обходиться `security definer`.
-- Прибрати `.env.local` з історії репозиторію.
-- Виправити encoding, щоб не мати “битих” рядків у UI.
-- Додати мінімальні тести.
+### M2. Type safety is weakened by broad casting patterns
+- Evidence:
+  - `src/services/chat/messages.service.ts:40` -> `as unknown as Message[]`
+  - `src/hooks/chat/useChatEvents.ts:36` -> `state as unknown as PresenceState`
+  - Multiple `as FullChat` casts in service/query layers
+- Impact:
+  - Runtime shape mismatches can bypass compile-time checks.
+  - Harder refactors and less reliable domain contracts.
+- Recommendation:
+  - Validate external payloads at boundaries (zod or narrow type guards) before casting.
+  - Reduce `unknown as` to explicit schema parsing for DB/RPC responses.
 
-## 10) Рекомендований план робіт (перші 7–14 днів)
-1. **Безпека**: Переписати RPC на `SECURITY INVOKER` або додати явні перевірки членства + `set row_security = on`.
-2. **Міграції**: Виправити `storage.objects` політики і порядок `updated_at` міграцій.
-3. **Секрети**: Очистити git‑історію від `.env.local`, підтвердити `.gitignore`.
-4. **Кодування**: Конвертувати усі тексти в UTF‑8.
-5. **Тести/CI**: мінімальний pipeline + smoke тест для auth/chat flow.
-6. **Документація**: синхронізувати README з фактичними версіями.
+### M3. Unused validation layer / dead code increases maintenance cost
+- Evidence:
+  - `src/hooks/useDebouncedSearch.ts` exists but no runtime usage outside itself.
+  - `searchSchema` in `src/lib/validations/chat.ts:71` effectively not part of active search flow.
+- Impact:
+  - Security/validation assumptions may be false because code is not on execution path.
+- Recommendation:
+  - Either wire these validators into real search flow or remove dead modules.
 
-## 11) Перелік переглянутих файлів (неповний)
-- `package.json`, `tsconfig.json`, `eslint.config.mjs`, `biome.json`, `next.config.ts`
-- `src/middleware.ts`, `src/lib/supabase/*.ts`, `src/components/auth/AuthProvider.tsx`
-- `src/app/auth/callback/route.ts`, `src/app/api/storage/config/route.ts`
-- `src/store/usePresenceStore.ts`, `src/hooks/useGlobalRealtime.ts`
-- `src/services/chat/*.ts`, `src/services/storage/storage.service.ts`
-- `supabase/migrations/*.sql`, `supabase/config.toml`
-- `Dockerfile`, `docker-compose.yml`, `.env.example`, `.env.local`
+### M4. Scroll position hook currently does not track real scroll state
+- Evidence:
+  - `src/hooks/ui/useScrollPosition.ts:24` function unused
+  - `:30-31` hardcodes bottom state values in check logic
+- Impact:
+  - Consumer code may rely on inaccurate `isAtBottom` / percentage semantics.
+- Recommendation:
+  - Implement real Virtuoso scroll callbacks or delete unused hook to avoid confusion.
 
----
+## Low
 
-Якщо потрібно, можу доповнити аудит конкретним планом виправлень із оцінками часу або перейти до виправлення найкритичніших пунктів прямо в коді.
+### L1. Environment template has duplicated variable entry
+- Evidence:
+  - `.env.example:8` and `.env.example:10` both define `SUPABASE_SERVICE_ROLE_KEY`
+- Impact:
+  - Developer confusion in setup and secret handling.
+- Recommendation:
+  - Keep a single canonical entry with clear server-only annotation.
+
+### L2. Quality command mutates source during checks
+- Evidence:
+  - `package.json:13` -> `"check": "biome check --write ./src && pnpm lint"`
+- Impact:
+  - CI/local checks may introduce source diffs unexpectedly.
+- Recommendation:
+  - Split into non-mutating `check` and explicit `format:fix` command.
+
+## 4. Positive Observations
+
+- `tsconfig` strict mode enabled and typecheck currently clean.
+- Realtime/chat state management is thoughtfully layered (`services` + `hooks` + cache helpers).
+- DB rate limit config is centralized and access to config table is locked to `service_role`:
+  - `supabase/migrations/20260321153000_limits_tuning_and_schema_cleanup.sql:173-174`
+- Auth callback validates redirect path to local route-only values:
+  - `src/app/auth/callback/route.ts` (`safeNext`)
+
+## 5. Production Readiness Checklist
+
+Minimum before production rollout:
+1. Upgrade Next.js to patched version (`>=16.1.7`) and re-audit dependencies.
+2. Fix lint errors in `ImageModal` and make lint pass cleanly.
+3. Harden user-search RPC against wildcard enumeration.
+4. Unify message mutation path (RPC or direct table writes, not both).
+5. Align upload validation contract and add resilient fallback behavior.
+
+Recommended next:
+1. Add tests for:
+   - chat/message mutation invariants
+   - upload validation matrix (mime/size/count/config-failure)
+   - search RPC abuse cases (`%`, `_`, high-frequency queries)
+2. Add CI gates: `lint`, `tsc --noEmit`, `build`, `audit`.
+
+## 6. Suggested 7-Day Remediation Plan
+
+Day 1-2:
+- Upgrade `next` and related packages; fix breakages.
+- Resolve `ImageModal` hook violations.
+
+Day 3-4:
+- Refactor search RPC + query sanitization.
+- Consolidate message mutation API path.
+
+Day 5:
+- Repair upload validation model and fallback logic.
+
+Day 6-7:
+- Add minimum automated test suite + CI workflow.
+
+## 7. Notes and Limitations
+
+- This audit is based on code inspection + local command execution.
+- No end-to-end runtime load testing was performed.
+- Build initially failed in sandbox due blocked network fetch for Google Fonts, then succeeded with network access.

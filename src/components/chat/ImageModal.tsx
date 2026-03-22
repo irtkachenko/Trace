@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, ChevronLeft, ChevronRight, Download, ImageOff, X } from 'lucide-react';
@@ -15,7 +15,7 @@ interface ImageModalProps {
   onClose: () => void;
 }
 
-export default function ImageModal({ isOpen, images, initialIndex, onClose }: ImageModalProps) {
+function ImageModalContent({ isOpen, images, initialIndex, onClose }: ImageModalProps) {
   const [mounted, setMounted] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [direction, setDirection] = useState(0);
@@ -23,7 +23,6 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const SWIPE_THRESHOLD_PX = 45;
 
-  // 1. Безпечне монтування для SSR (виправляє cascading renders)
   useEffect(() => {
     const raf = requestAnimationFrame(() => {
       setMounted(true);
@@ -31,20 +30,8 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // 2. Синхронізація стейту (паттерн Adjusting state based on props)
-  const prevInitialIndexRef = useRef(initialIndex);
-  useEffect(() => {
-    if (initialIndex !== prevInitialIndexRef.current) {
-      prevInitialIndexRef.current = initialIndex;
-      setCurrentIndex(initialIndex);
-      setHasError(false);
-      setDirection(0);
-    }
-  }, [initialIndex]);
-
   const handleNext = useCallback(
     (e?: React.MouseEvent | KeyboardEvent) => {
-      // Безпечна перевірка: спочатку чи існує 'e', потім чи є в ньому метод
       if (e && 'stopPropagation' in e) {
         e.stopPropagation();
       }
@@ -60,7 +47,6 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
 
   const handlePrev = useCallback(
     (e?: React.MouseEvent | KeyboardEvent) => {
-      // Аналогічно тут
       if (e && 'stopPropagation' in e) {
         e.stopPropagation();
       }
@@ -90,7 +76,6 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
       const dy = touch.clientY - touchStartRef.current.y;
       touchStartRef.current = null;
 
-      // Horizontal swipe only; ignore vertical drags.
       if (Math.abs(dx) < SWIPE_THRESHOLD_PX || Math.abs(dx) <= Math.abs(dy)) return;
 
       if (dx < 0) {
@@ -102,7 +87,6 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
     [handleNext, handlePrev],
   );
 
-  // 3. Обробка клавіш та блокування скролу
   useEffect(() => {
     if (!isOpen) return;
 
@@ -121,12 +105,6 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
       document.body.style.overflow = originalStyle;
     };
   }, [isOpen, onClose, handleNext, handlePrev]);
-
-  if (!mounted) {
-    return <div className="hidden" />;
-  }
-
-  const currentImage = images[currentIndex];
 
   const variants = useMemo(
     () => ({
@@ -151,6 +129,12 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
     [],
   );
 
+  if (!mounted) {
+    return <div className="hidden" />;
+  }
+
+  const currentImage = images[currentIndex];
+
   const modalContent = (
     <AnimatePresence initial={false}>
       {isOpen && (
@@ -161,14 +145,13 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
           className="fixed inset-0 z-[9999] flex flex-col bg-black/95 backdrop-blur-md"
           onClick={onClose}
         >
-          {/* Header */}
           <div className="absolute top-0 left-0 right-0 h-20 px-6 flex items-center justify-between z-[10000] bg-gradient-to-b from-black/50 to-transparent">
             <div className="flex flex-col text-white">
               <span className="font-medium truncate max-w-[200px] sm:max-w-md text-sm">
-                {currentImage?.metadata?.name || 'Зображення'}
+                {currentImage?.metadata?.name || 'Image'}
               </span>
               <span className="text-white/40 text-[11px] uppercase tracking-wider">
-                {currentIndex + 1} з {images.length}
+                {currentIndex + 1} of {images.length}
               </span>
             </div>
 
@@ -193,7 +176,6 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
             </div>
           </div>
 
-          {/* Main Content */}
           <div
             className="relative flex-1 flex items-center justify-center p-4"
             onTouchStart={handleTouchStart}
@@ -227,7 +209,7 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
                 {!hasError && currentImage?.url ? (
                   <Image
                     src={currentImage.url}
-                    alt="Галерея"
+                    alt="Gallery"
                     fill
                     className="object-contain select-none"
                     priority
@@ -264,7 +246,6 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
             )}
           </div>
 
-          {/* Indicators */}
           <div className="h-20 px-6 flex items-center justify-center gap-2 z-[10000]">
             {images.length > 1 &&
               images.map((img, idx) => (
@@ -283,4 +264,9 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
   );
 
   return createPortal(modalContent, document.body);
+}
+
+export default function ImageModal(props: ImageModalProps) {
+  const remountKey = `${props.initialIndex}-${props.isOpen ? 'open' : 'closed'}`;
+  return <ImageModalContent key={remountKey} {...props} />;
 }
