@@ -66,7 +66,7 @@ function ChatListBase() {
   // Функція для рендерингу одного чату
   const renderChat = (_index: number, chat: FullChat) => {
     const partner = chat.user_id === currentUserId ? chat.recipient : chat.user;
-    const chatDisplayTitle = partner?.name || chat.title || 'Користувач Trace';
+    const chatDisplayTitle = partner?.name || chat.title || 'Користувач Telegraf';
     const partnerImage = partner?.image;
     
     // Перевіряємо, чи є цей чат активним

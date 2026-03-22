@@ -1,5 +1,5 @@
 {
-  "name": "trace",
+  "name": "telegraf",
   "version": "0.1.0",
   "private": true,
   "scripts": {

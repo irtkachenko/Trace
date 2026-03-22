@@ -52,7 +52,7 @@ function RenderGuard({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <Profiler id="TraceMonitor" onRender={handleRender}>
+    <Profiler id="TelegrafMonitor" onRender={handleRender}>
       {children}
     </Profiler>
   );

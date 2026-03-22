@@ -1,4 +1,4 @@
-# Trace API Documentation
+# Telegraf API Documentation
 
 ## Server APIs
 
