@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertCircle, ChevronLeft, ChevronRight, Download, ImageOff, X } from 'lucide-react';
 import Image from 'next/image';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import type { Attachment } from '@/types';
@@ -32,14 +32,15 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
   }, []);
 
   // 2. Синхронізація стейту (паттерн Adjusting state based on props)
-  const [prevInitialIndex, setPrevInitialIndex] = useState(initialIndex);
-
-  if (initialIndex !== prevInitialIndex) {
-    setPrevInitialIndex(initialIndex);
-    setCurrentIndex(initialIndex);
-    setHasError(false);
-    setDirection(0);
-  }
+  const prevInitialIndexRef = useRef(initialIndex);
+  useEffect(() => {
+    if (initialIndex !== prevInitialIndexRef.current) {
+      prevInitialIndexRef.current = initialIndex;
+      setCurrentIndex(initialIndex);
+      setHasError(false);
+      setDirection(0);
+    }
+  }, [initialIndex]);
 
   const handleNext = useCallback(
     (e?: React.MouseEvent | KeyboardEvent) => {
@@ -127,25 +128,28 @@ export default function ImageModal({ isOpen, images, initialIndex, onClose }: Im
 
   const currentImage = images[currentIndex];
 
-  const variants = {
-    enter: (dir: number) => ({
-      x: dir > 0 ? 300 : dir < 0 ? -300 : 0,
-      opacity: 0,
-      scale: 0.95,
+  const variants = useMemo(
+    () => ({
+      enter: (dir: number) => ({
+        x: dir > 0 ? 300 : dir < 0 ? -300 : 0,
+        opacity: 0,
+        scale: 0.95,
+      }),
+      center: {
+        zIndex: 1,
+        x: 0,
+        opacity: 1,
+        scale: 1,
+      },
+      exit: (dir: number) => ({
+        zIndex: 0,
+        x: dir < 0 ? 300 : dir > 0 ? -300 : 0,
+        opacity: 0,
+        scale: 0.95,
+      }),
     }),
-    center: {
-      zIndex: 1,
-      x: 0,
-      opacity: 1,
-      scale: 1,
-    },
-    exit: (dir: number) => ({
-      zIndex: 0,
-      x: dir < 0 ? 300 : dir > 0 ? -300 : 0,
-      opacity: 0,
-      scale: 0.95,
-    }),
-  };
+    [],
+  );
 
   const modalContent = (
     <AnimatePresence initial={false}>

@@ -23,6 +23,7 @@ interface PresenceManager {
   userId: string | null;
   subscribers: number;
   heartbeatInterval: NodeJS.Timeout | null;
+  reconnectTimer: NodeJS.Timeout | null;
   reconnectAttempts: number;
   maxReconnectAttempts: number;
   debounceTimer: NodeJS.Timeout | null;
@@ -45,6 +46,7 @@ function createPresenceManager(): PresenceManager {
     userId: null,
     subscribers: 0,
     heartbeatInterval: null,
+    reconnectTimer: null,
     reconnectAttempts: 0,
     maxReconnectAttempts: MAX_RECONNECT_ATTEMPTS,
     debounceTimer: null,
@@ -185,6 +187,12 @@ function setupChannel(
   // Update activity when setting up channel
   updateActivity(manager);
 
+  // Cancel any pending reconnect attempt before creating a new channel
+  if (manager.reconnectTimer) {
+    clearTimeout(manager.reconnectTimer);
+    manager.reconnectTimer = null;
+  }
+
   // Remove existing channel before creating new one to prevent memory leaks
   if (manager.channel) {
     supabase.removeChannel(manager.channel);
@@ -241,10 +249,11 @@ function setupChannel(
               const jitter = baseDelay * 0.2 * (Math.random() * 2 - 1);
               const delay = Math.max(0, baseDelay + jitter);
 
-              setTimeout(() => {
+              manager.reconnectTimer = setTimeout(() => {
                 if (manager.channel && manager.subscribers > 0) {
                   setupChannel(manager, userId, setOnlineUsers, setConnectionState);
                 }
+                manager.reconnectTimer = null;
               }, delay);
             }
             break;
@@ -354,6 +363,12 @@ function cleanupPresence(): void {
   if (manager.cleanupTimeout) {
     clearTimeout(manager.cleanupTimeout);
     manager.cleanupTimeout = null;
+  }
+
+  // Clear pending reconnect timeout
+  if (manager.reconnectTimer) {
+    clearTimeout(manager.reconnectTimer);
+    manager.reconnectTimer = null;
   }
 
   // Update last seen before disconnecting

@@ -77,7 +77,10 @@ export function useChatEvents(chatId: string, user: User | null) {
         }
       }
       channelRef.current = null;
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
     };
   }, [chatId, handlePresenceSync, user?.id]);
 
