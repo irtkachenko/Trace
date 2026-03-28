@@ -1,13 +1,13 @@
-﻿name: telegraph
+﻿name: telegraf
 
 services:
   app:
-    container_name: telegraph
+    container_name: telegraf
     build:
       context: .
       dockerfile: Dockerfile
       target: runner
-    image: telegraph-app:latest
+    image: telegraf-app:latest
     restart: unless-stopped
     ports:
       - "3000:3000"

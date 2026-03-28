@@ -1,6 +1,6 @@
 services:
   app:
-    container_name: telegraph-dev
+    container_name: telegraf-dev
     build:
       context: .
       target: deps # Використовуємо стадію, де вже є node_modules
